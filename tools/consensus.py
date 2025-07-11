@@ -29,95 +29,54 @@ from mcp.types import TextContent
 
 from config import TEMPERATURE_ANALYTICAL
 from systemprompts import CONSENSUS_PROMPT
-from tools.shared.base_models import WorkflowRequest
+from tools.shared.base_models import ToolRequest
 
-from .workflow.base import WorkflowTool
+from .simple.base import SimpleTool
 
 logger = logging.getLogger(__name__)
 
-# Tool-specific field descriptions for consensus workflow
-CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS = {
-    "step": "The problem or proposal to gather consensus on. Include context.",
-    "step_number": "Always 1 (single-call workflow).",
-    "total_steps": "Always 1 (single-call workflow).",
-    "next_step_required": "Always False (single-call workflow).",
-    "findings": "Your initial analysis or context for the models.",
-    "relevant_files": "Optional files for additional context (absolute paths).",
+# Tool-specific field descriptions for consensus
+CONSENSUS_FIELD_DESCRIPTIONS = {
+    "prompt": "The problem or proposal to gather consensus on. Include context.",
     "models": "List of models to consult. Example: [{'model': 'o3'}, {'model': 'flash'}]",
-    "current_model_index": "Internal tracking field.",
-    "model_responses": "Internal tracking field.",
+    "relevant_files": "Optional files for additional context (absolute paths).",
     "images": "Optional images for visual context (absolute paths or base64).",
     "enable_cross_feedback": "Enable refinement phase where models see others' responses. Default: True.",
     "cross_feedback_prompt": "Optional custom prompt for refinement phase.",
 }
 
 
-class ConsensusRequest(WorkflowRequest):
-    """Request model for consensus workflow steps"""
+class ConsensusRequest(ToolRequest):
+    """Request model for consensus tool"""
 
-    # Required fields for each step
-    step: str = Field(..., description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["step"])
-    step_number: int = Field(..., description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["step_number"])
-    total_steps: int = Field(..., description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["total_steps"])
-    next_step_required: bool = Field(..., description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["next_step_required"])
+    # Required fields
+    prompt: str = Field(..., description=CONSENSUS_FIELD_DESCRIPTIONS["prompt"])
+    models: list[dict] = Field(..., description=CONSENSUS_FIELD_DESCRIPTIONS["models"])
 
-    # Investigation tracking fields
-    findings: str = Field(..., description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["findings"])
-    confidence: str = Field(default="exploring", exclude=True, description="Not used")
-
-    # Consensus-specific fields (only needed in step 1)
-    models: list[dict] | None = Field(None, description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["models"])
+    # Optional fields
     relevant_files: list[str] | None = Field(
         default_factory=list,
-        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["relevant_files"],
+        description=CONSENSUS_FIELD_DESCRIPTIONS["relevant_files"],
     )
-
-    # Internal tracking fields
-    current_model_index: int | None = Field(
-        0,
-        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["current_model_index"],
-    )
-    model_responses: list[dict] | None = Field(
-        default_factory=list,
-        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["model_responses"],
-    )
-
-    # Optional images for visual debugging
-    images: list[str] | None = Field(default=None, description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["images"])
-
-    # New fields for parallel consensus with cross-feedback
+    images: list[str] | None = Field(default=None, description=CONSENSUS_FIELD_DESCRIPTIONS["images"])
     enable_cross_feedback: bool = Field(
         default=True,
-        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["enable_cross_feedback"],
+        description=CONSENSUS_FIELD_DESCRIPTIONS["enable_cross_feedback"],
     )
     cross_feedback_prompt: str | None = Field(
         default=None,
-        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+        description=CONSENSUS_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
     )
-
-    # Override inherited fields to exclude them from schema
-    temperature: float | None = Field(default=None, exclude=True)
-    thinking_mode: str | None = Field(default=None, exclude=True)
-    use_websearch: bool | None = Field(default=None, exclude=True)
-
-    # Not used in consensus workflow
-    files_checked: list[str] | None = Field(default_factory=list, exclude=True)
-    relevant_context: list[str] | None = Field(default_factory=list, exclude=True)
-    issues_found: list[dict] | None = Field(default_factory=list, exclude=True)
-    hypothesis: str | None = Field(None, exclude=True)
-    backtrack_from_step: int | None = Field(None, exclude=True)
 
     @model_validator(mode="after")
     def validate_consensus_requirements(self):
         """Ensure consensus request has required models field."""
-        # For the new parallel workflow, we always need models
-        if not self.models:
-            raise ValueError("Consensus requires 'models' field to specify which models to consult")
-
+        if not self.models or len(self.models) == 0:
+            raise ValueError("Consensus requires at least one model in 'models' field")
         return self
 
 
-class ConsensusTool(WorkflowTool):
+class ConsensusTool(SimpleTool):
     """
     Parallel consensus tool with cross-model feedback.
 
@@ -133,8 +92,6 @@ class ConsensusTool(WorkflowTool):
         super().__init__()
         self.initial_prompt: str | None = None
         self.models_to_consult: list[dict] = []
-        self.accumulated_responses: list[dict] = []
-        self._current_arguments: dict[str, Any] = {}
 
     def get_name(self) -> str:
         return "consensus"
@@ -160,136 +117,57 @@ class ConsensusTool(WorkflowTool):
 
         return ToolModelCategory.EXTENDED_REASONING
 
-    def get_workflow_request_model(self):
-        """Return the consensus workflow-specific request model."""
+    def get_request_model(self):
+        """Return the consensus-specific request model."""
         return ConsensusRequest
 
     def get_input_schema(self) -> dict[str, Any]:
-        """Generate input schema for consensus workflow."""
-        from .workflow.schema_builders import WorkflowSchemaBuilder
-
-        # Consensus tool-specific field definitions
-        consensus_field_overrides = {
-            # Override standard workflow fields that need consensus-specific descriptions
-            "step": {
-                "type": "string",
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["step"],
-            },
-            "step_number": {
-                "type": "integer",
-                "minimum": 1,
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["step_number"],
-            },
-            "total_steps": {
-                "type": "integer",
-                "minimum": 1,
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["total_steps"],
-            },
-            "next_step_required": {
-                "type": "boolean",
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["next_step_required"],
-            },
-            "findings": {
-                "type": "string",
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["findings"],
-            },
-            "relevant_files": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["relevant_files"],
-            },
-            # consensus-specific fields (not in base workflow)
-            "models": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "model": {"type": "string"},
-                    },
-                    "required": ["model"],
+        """Generate input schema for consensus tool."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["prompt"],
                 },
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["models"],
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "model": {"type": "string"},
+                        },
+                        "required": ["model"],
+                    },
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["models"],
+                },
+                "relevant_files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["relevant_files"],
+                },
+                "images": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["images"],
+                },
+                "enable_cross_feedback": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["enable_cross_feedback"],
+                },
+                "cross_feedback_prompt": {
+                    "type": "string",
+                    "description": CONSENSUS_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+                },
+                "continuation_id": {
+                    "type": "string",
+                    "description": "Thread continuation ID for multi-turn conversations.",
+                },
             },
-            "current_model_index": {
-                "type": "integer",
-                "minimum": 0,
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["current_model_index"],
-            },
-            "model_responses": {
-                "type": "array",
-                "items": {"type": "object"},
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["model_responses"],
-            },
-            "images": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["images"],
-            },
-            "enable_cross_feedback": {
-                "type": "boolean",
-                "default": True,
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["enable_cross_feedback"],
-            },
-            "cross_feedback_prompt": {
-                "type": "string",
-                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
-            },
+            "required": ["prompt", "models"],
         }
-
-        # Define excluded fields for consensus workflow
-        excluded_workflow_fields = [
-            "files_checked",  # Not used in consensus workflow
-            "relevant_context",  # Not used in consensus workflow
-            "issues_found",  # Not used in consensus workflow
-            "hypothesis",  # Not used in consensus workflow
-            "backtrack_from_step",  # Not used in consensus workflow
-            "confidence",  # Not used in consensus workflow
-        ]
-
-        excluded_common_fields = [
-            "model",  # Consensus uses 'models' field instead
-            "temperature",  # Not used in consensus workflow
-            "thinking_mode",  # Not used in consensus workflow
-            "use_websearch",  # Not used in consensus workflow
-        ]
-
-        # Build schema with proper field exclusion
-        # Include model field for compatibility but don't require it
-        schema = WorkflowSchemaBuilder.build_schema(
-            tool_specific_fields=consensus_field_overrides,
-            model_field_schema=self.get_model_field_schema(),
-            auto_mode=False,  # Consensus doesn't require model at MCP boundary
-            tool_name=self.get_name(),
-            excluded_workflow_fields=excluded_workflow_fields,
-            excluded_common_fields=excluded_common_fields,
-        )
         return schema
-
-    def get_required_actions(
-        self, step_number: int, confidence: str, findings: str, total_steps: int
-    ) -> list[str]:  # noqa: ARG002
-        """Define required actions for consensus workflow.
-
-        For the new parallel workflow, this is simplified since everything happens in one call.
-        """
-        return [
-            "Consensus gathering will consult all specified models in parallel",
-            "Models will receive the same prompt and provide initial responses",
-            "If cross-feedback is enabled, models will see each other's responses and refine their answers",
-            "You will receive all responses (initial and refined) in a single result",
-        ]
-
-    def should_call_expert_analysis(self, consolidated_findings, request=None) -> bool:
-        """Consensus workflow doesn't use traditional expert analysis - it consults models step by step."""
-        return False
-
-    def prepare_expert_analysis_context(self, consolidated_findings) -> str:
-        """Not used in consensus workflow."""
-        return ""
-
-    def requires_expert_analysis(self) -> bool:
-        """Consensus workflow handles its own model consultations."""
-        return False
 
     def requires_model(self) -> bool:
         """
@@ -302,49 +180,15 @@ class ConsensusTool(WorkflowTool):
         """
         return False
 
-    # Hook method overrides for consensus-specific behavior
-
-    def prepare_step_data(self, request) -> dict:
-        """Prepare consensus-specific step data."""
-        step_data = {
-            "step": request.step,
-            "step_number": request.step_number,
-            "findings": request.findings,
-            "files_checked": [],  # Not used
-            "relevant_files": request.relevant_files or [],
-            "relevant_context": [],  # Not used
-            "issues_found": [],  # Not used
-            "confidence": "exploring",  # Not used, kept for compatibility
-            "hypothesis": None,  # Not used
-            "images": request.images or [],  # Now used for visual context
-        }
-        return step_data
-
-    async def handle_work_completion(self, response_data: dict, request, arguments: dict) -> dict:  # noqa: ARG002
-        """Handle consensus workflow completion.
-
-        For the new parallel workflow, this is not used since everything happens in execute_workflow.
-        """
-        # This method is not used in the new parallel workflow
-        return response_data
-
-    def handle_work_continuation(self, response_data: dict, request) -> dict:
-        """Handle continuation between consensus steps.
-
-        For the new parallel workflow, this is not used since everything happens in one call.
-        """
-        # This method is not used in the new parallel workflow
-        return response_data
-
-    async def execute_workflow(self, arguments: dict[str, Any]) -> list:
-        """Execute parallel consensus workflow with optional cross-model feedback."""
+    async def execute(self, arguments: dict[str, Any]) -> list:
+        """Execute parallel consensus with optional cross-model feedback."""
 
         # Validate request
-        request = self.get_workflow_request_model()(**arguments)
+        request = self.get_request_model()(**arguments)
 
         # Store initial state
-        self.initial_prompt = request.step
-        self.models_to_consult = request.models or []
+        self.initial_prompt = request.prompt
+        self.models_to_consult = request.models
 
         try:
             # Phase 1: Parallel initial model consultations
@@ -576,11 +420,11 @@ class ConsensusTool(WorkflowTool):
     ) -> str:
         """Build the prompt for cross-model feedback phase."""
         if custom_prompt:
-            # Use custom prompt template
-            prompt = custom_prompt
-        else:
-            # Default cross-feedback prompt
-            prompt = f"""You previously analyzed the following question/proposal:
+            # Use custom prompt template exactly as provided
+            return custom_prompt
+
+        # Default cross-feedback prompt
+        prompt = f"""You previously analyzed the following question/proposal:
 
 {self.initial_prompt}
 
@@ -599,8 +443,7 @@ Other AI models have also provided their perspectives on this same question. Her
             prompt += "\n"
 
         # Add refinement instructions
-        if not custom_prompt:
-            prompt += """
+        prompt += """
 === REFINEMENT REQUEST ===
 
 After reviewing these other perspectives, please provide a refined response that:
@@ -618,113 +461,50 @@ cross-model insights improve the overall analysis.
 
         return prompt
 
-    def customize_workflow_response(self, response_data: dict, request) -> dict:
-        """Customize response for consensus workflow."""
-        # Store model responses in the response for tracking
-        if self.accumulated_responses:
-            response_data["accumulated_responses"] = self.accumulated_responses
+    # Required abstract methods from SimpleTool
+    def get_tool_fields(self) -> dict[str, dict[str, Any]]:
+        """Tool-specific field definitions for consensus."""
+        return {
+            "prompt": {
+                "type": "string",
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["prompt"],
+            },
+            "models": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "model": {"type": "string"},
+                    },
+                    "required": ["model"],
+                },
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["models"],
+            },
+            "relevant_files": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["relevant_files"],
+            },
+            "images": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["images"],
+            },
+            "enable_cross_feedback": {
+                "type": "boolean",
+                "default": True,
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["enable_cross_feedback"],
+            },
+            "cross_feedback_prompt": {
+                "type": "string",
+                "description": CONSENSUS_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+            },
+        }
 
-        # Add consensus-specific fields
-        if request.step_number == 1:
-            response_data["consensus_workflow_status"] = "initial_analysis_complete"
-        elif request.step_number < request.total_steps - 1:
-            response_data["consensus_workflow_status"] = "consulting_models"
-        else:
-            response_data["consensus_workflow_status"] = "ready_for_synthesis"
+    def get_required_fields(self) -> list[str]:
+        """Required fields for consensus tool."""
+        return ["prompt", "models"]
 
-        # Customize metadata for consensus workflow
-        self._customize_consensus_metadata(response_data, request)
-
-        return response_data
-
-    def _customize_consensus_metadata(self, response_data: dict, request) -> None:
-        """
-        Customize metadata for consensus workflow to accurately reflect multi-model nature.
-
-        The default workflow metadata shows the model running Agent's analysis steps,
-        but consensus is a multi-model tool that consults different models. We need
-        to provide accurate metadata that reflects this.
-        """
-        if "metadata" not in response_data:
-            response_data["metadata"] = {}
-
-        metadata = response_data["metadata"]
-
-        # Always preserve tool_name
-        metadata["tool_name"] = self.get_name()
-
-        if request.step_number == request.total_steps:
-            # Final step - show comprehensive consensus metadata
-            models_consulted = []
-            if self.models_to_consult:
-                models_consulted = [m["model"] for m in self.models_to_consult]
-
-            metadata.update(
-                {
-                    "workflow_type": "multi_model_consensus",
-                    "models_consulted": models_consulted,
-                    "consensus_complete": True,
-                    "total_models": len(self.models_to_consult) if self.models_to_consult else 0,
-                }
-            )
-
-            # Remove the misleading single model metadata
-            metadata.pop("model_used", None)
-            metadata.pop("provider_used", None)
-
-        else:
-            # Intermediate steps - show consensus workflow in progress
-            models_to_consult = []
-            if self.models_to_consult:
-                models_to_consult = [m["model"] for m in self.models_to_consult]
-
-            metadata.update(
-                {
-                    "workflow_type": "multi_model_consensus",
-                    "models_to_consult": models_to_consult,
-                    "consultation_step": request.step_number,
-                    "total_consultation_steps": request.total_steps,
-                }
-            )
-
-            # Remove the misleading single model metadata that shows Agent's execution model
-            # instead of the models being consulted
-            metadata.pop("model_used", None)
-            metadata.pop("provider_used", None)
-
-    def _add_workflow_metadata(self, response_data: dict, arguments: dict[str, Any]) -> None:
-        """
-        Override workflow metadata addition for consensus tool.
-
-        The consensus tool doesn't use single model metadata because it's a multi-model
-        workflow. Instead, we provide consensus-specific metadata that accurately
-        reflects the models being consulted.
-        """
-        # Initialize metadata if not present
-        if "metadata" not in response_data:
-            response_data["metadata"] = {}
-
-        # Add basic tool metadata
-        response_data["metadata"]["tool_name"] = self.get_name()
-
-        # The consensus-specific metadata is already added by _customize_consensus_metadata
-        # which is called from customize_workflow_response. We don't add the standard
-        # single-model metadata (model_used, provider_used) because it's misleading
-        # for a multi-model consensus workflow.
-
-        logger.debug(
-            f"[CONSENSUS_METADATA] {self.get_name()}: Using consensus-specific metadata instead of single-model metadata"
-        )
-
-    def store_initial_issue(self, step_description: str):
-        """Store initial prompt for model consultations."""
-        self.initial_prompt = step_description
-
-    # Required abstract methods from BaseTool
-    def get_request_model(self):
-        """Return the consensus workflow-specific request model."""
-        return ConsensusRequest
-
-    async def prepare_prompt(self, request) -> str:  # noqa: ARG002
-        """Not used - workflow tools use execute_workflow()."""
-        return ""  # Workflow tools use execute_workflow() directly
+    async def prepare_prompt(self, request: ConsensusRequest) -> str:
+        """Not used - consensus uses execute() directly."""
+        return ""
