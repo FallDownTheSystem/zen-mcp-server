@@ -1042,7 +1042,7 @@ async def handle_list_prompts() -> list[Prompt]:
     """
     List all available prompts for Claude Code shortcuts.
 
-    This handler returns prompts that enable shortcuts like /zen:thinkdeeper.
+    This handler returns prompts that enable shortcuts like /zen:chat and /zen:consensus.
     We automatically generate prompts from all tools (1:1 mapping) plus add
     a few marketing aliases with richer templates for commonly used tools.
 
@@ -1092,7 +1092,7 @@ async def handle_get_prompt(name: str, arguments: dict[str, Any] = None) -> GetP
     """
     Get prompt details and generate the actual prompt text.
 
-    This handler is called when a user invokes a prompt (e.g., /zen:thinkdeeper or /zen:chat:o3).
+    This handler is called when a user invokes a prompt (e.g., /zen:chat or /zen:chat:o3).
     It generates the appropriate text that Claude will then use to call the
     underlying tool.
 
@@ -1220,9 +1220,6 @@ async def main():
         logger.info(f"Model mode: Fixed model '{DEFAULT_MODEL}'")
 
     # Import here to avoid circular imports
-    from config import DEFAULT_THINKING_MODE_THINKDEEP
-
-    logger.info(f"Default thinking mode (ThinkDeep): {DEFAULT_THINKING_MODE_THINKDEEP}")
 
     logger.info(f"Available tools: {list(TOOLS.keys())}")
     logger.info("Server ready - waiting for tool requests...")

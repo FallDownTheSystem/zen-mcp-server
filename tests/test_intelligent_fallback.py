@@ -170,7 +170,7 @@ class TestIntelligentFallback:
                 thread_id="test-456",
                 created_at="2023-01-01T00:00:00Z",
                 last_updated_at="2023-01-01T00:00:00Z",
-                tool_name="analyze",
+                tool_name="chat",
                 turns=[ConversationTurn(role="assistant", content="Test response", timestamp="2023-01-01T00:00:30Z")],
                 initial_context={},
             )
@@ -200,7 +200,7 @@ class TestIntelligentFallback:
                 thread_id="test-789",
                 created_at="2023-01-01T00:00:00Z",
                 last_updated_at="2023-01-01T00:00:00Z",
-                tool_name="thinkdeep",
+                tool_name="consensus",
                 turns=[
                     ConversationTurn(role="user", content="Test in non-auto mode", timestamp="2023-01-01T00:00:30Z")
                 ],

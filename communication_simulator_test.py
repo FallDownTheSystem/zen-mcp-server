@@ -40,7 +40,7 @@ Quick Test Mode (for time-limited testing):
     - content_validation (content validation and deduplication)
     - model_thinking_config (flash/flashlite model testing)
     - o3_model_selection (o3 model selection testing)
-    - consensus_workflow_accurate (consensus tool testing)
+    - consensus_conversation (consensus tool testing)
     - chat_validation (chat tool validation)
 
 Examples:
@@ -110,7 +110,7 @@ class CommunicationSimulator:
             "content_validation",  # Content validation and deduplication
             "model_thinking_config",  # Flash/flashlite model testing
             "o3_model_selection",  # O3 model selection testing
-            "consensus_workflow_accurate",  # Consensus tool testing
+            "consensus_conversation",  # Consensus tool testing
             "chat_validation",  # Chat tool validation
         ]
 

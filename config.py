@@ -14,9 +14,9 @@ import os
 # These values are used in server responses and for tracking releases
 # IMPORTANT: This is the single source of truth for version and author info
 # Semantic versioning: MAJOR.MINOR.PATCH
-__version__ = "6.2.5"
+__version__ = "6.2.6"
 # Last update date in ISO format
-__updated__ = "2025-07-11"
+__updated__ = "2025-07-12"
 # Original author and fork information
 __author__ = "Fahad Gilani"
 __forked_by__ = "FallDownTheSystem"
@@ -40,12 +40,6 @@ IS_AUTO_MODE = DEFAULT_MODEL.lower() == "auto"
 # - API key-based filtering (prevents wrong models from being shown to Claude)
 # - Proper provider routing (models route to the correct API endpoint)
 # - Clean separation of concerns (providers own their model definitions)
-
-
-# Thinking Mode Defaults
-# DEFAULT_THINKING_MODE_THINKDEEP: Default thinking depth for extended reasoning tool
-# Higher modes use more computational budget but provide deeper analysis
-DEFAULT_THINKING_MODE_THINKDEEP = os.getenv("DEFAULT_THINKING_MODE_THINKDEEP", "high")
 
 
 # MCP Protocol Transport Limits

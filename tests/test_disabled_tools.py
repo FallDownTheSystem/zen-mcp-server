@@ -37,23 +37,23 @@ class TestDisabledTools:
 
     def test_parse_disabled_tools_single(self):
         """Single tool name parsed correctly."""
-        with patch.dict(os.environ, {"DISABLED_TOOLS": "debug"}):
-            assert parse_disabled_tools_env() == {"debug"}
+        with patch.dict(os.environ, {"DISABLED_TOOLS": "chat"}):
+            assert parse_disabled_tools_env() == {"chat"}
 
     def test_parse_disabled_tools_multiple(self):
         """Multiple tools with spaces parsed correctly."""
-        with patch.dict(os.environ, {"DISABLED_TOOLS": "debug, analyze, refactor"}):
-            assert parse_disabled_tools_env() == {"debug", "analyze", "refactor"}
+        with patch.dict(os.environ, {"DISABLED_TOOLS": "chat, consensus"}):
+            assert parse_disabled_tools_env() == {"chat", "consensus"}
 
     def test_parse_disabled_tools_extra_spaces(self):
         """Extra spaces and empty items handled correctly."""
-        with patch.dict(os.environ, {"DISABLED_TOOLS": " debug , , analyze ,  "}):
-            assert parse_disabled_tools_env() == {"debug", "analyze"}
+        with patch.dict(os.environ, {"DISABLED_TOOLS": " chat , , consensus ,  "}):
+            assert parse_disabled_tools_env() == {"chat", "consensus"}
 
     def test_parse_disabled_tools_duplicates(self):
         """Duplicate entries handled correctly (set removes duplicates)."""
-        with patch.dict(os.environ, {"DISABLED_TOOLS": "debug,analyze,debug"}):
-            assert parse_disabled_tools_env() == {"debug", "analyze"}
+        with patch.dict(os.environ, {"DISABLED_TOOLS": "chat,consensus,chat"}):
+            assert parse_disabled_tools_env() == {"chat", "consensus"}
 
     def test_tool_filtering_logic(self):
         """Test the complete filtering logic using the actual server functions."""
@@ -63,14 +63,6 @@ class TestDisabledTools:
             "consensus": MockTool("consensus"),
         }
 
-        # Add some mock tools that were removed to test filtering
-        ALL_TOOLS_WITH_REMOVED = {
-            "chat": MockTool("chat"),
-            "consensus": MockTool("consensus"),
-            "debug": MockTool("debug"),
-            "analyze": MockTool("analyze"),
-        }
-
         # Test case 1: No tools disabled
         disabled_tools = set()
         enabled_tools = apply_tool_filter(ALL_TOOLS, disabled_tools)
@@ -78,14 +70,12 @@ class TestDisabledTools:
         assert len(enabled_tools) == 2  # All tools included
         assert set(enabled_tools.keys()) == set(ALL_TOOLS.keys())
 
-        # Test case 2: Disable some regular tools
-        disabled_tools = {"debug", "analyze"}
-        enabled_tools = apply_tool_filter(ALL_TOOLS_WITH_REMOVED, disabled_tools)
+        # Test case 2: Disable one tool
+        disabled_tools = {"chat"}
+        enabled_tools = apply_tool_filter(ALL_TOOLS, disabled_tools)
 
-        assert len(enabled_tools) == 2  # chat, consensus (only 2 tools remain)
-        assert "debug" not in enabled_tools
-        assert "analyze" not in enabled_tools
-        assert "chat" in enabled_tools
+        assert len(enabled_tools) == 1  # only consensus remains
+        assert "chat" not in enabled_tools
         assert "consensus" in enabled_tools
 
         # Test case 3: Attempt to disable tools (simplified version has no essential tools)
@@ -99,10 +89,7 @@ class TestDisabledTools:
         """Test that unknown tool names generate appropriate warnings."""
         ALL_TOOLS = {
             "chat": MockTool("chat"),
-            "debug": MockTool("debug"),
-            "analyze": MockTool("analyze"),
-            "version": MockTool("version"),
-            "listmodels": MockTool("listmodels"),
+            "consensus": MockTool("consensus"),
         }
         disabled_tools = {"chat", "unknown_tool", "another_unknown"}
 
@@ -117,14 +104,14 @@ class TestDisabledTools:
             "chat": MockTool("chat"),
             "consensus": MockTool("consensus"),
         }
-        disabled_tools = {"version", "debug", "chat"}  # version and debug don't exist
+        disabled_tools = {"unknown_tool", "another_tool", "chat"}  # unknown_tool and another_tool don't exist
 
         with caplog.at_level(logging.WARNING):
             validate_disabled_tools(disabled_tools, ALL_TOOLS)
             # Should warn about non-existent tools, not essential tools
             assert "Unknown tools in DISABLED_TOOLS" in caplog.text
-            assert "version" in caplog.text
-            assert "debug" in caplog.text
+            assert "unknown_tool" in caplog.text
+            assert "another_tool" in caplog.text
 
     @pytest.mark.parametrize(
         "env_value,expected",
@@ -133,9 +120,9 @@ class TestDisabledTools:
             ("   ", set()),  # Only spaces
             (",,,", set()),  # Only commas
             ("chat", {"chat"}),  # Single tool
-            ("chat,debug", {"chat", "debug"}),  # Multiple tools
-            ("chat, debug, analyze", {"chat", "debug", "analyze"}),  # With spaces
-            ("chat,debug,chat", {"chat", "debug"}),  # Duplicates
+            ("chat,consensus", {"chat", "consensus"}),  # Multiple tools
+            ("chat, consensus", {"chat", "consensus"}),  # With spaces
+            ("chat,consensus,chat", {"chat", "consensus"}),  # Duplicates
         ],
     )
     def test_parse_disabled_tools_parametrized(self, env_value, expected):

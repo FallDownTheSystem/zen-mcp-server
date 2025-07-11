@@ -8,9 +8,6 @@ for tools that don't need multi-step workflows.
 Available simple tools:
 - chat: General chat and collaborative thinking
 - consensus: Multi-perspective analysis
-- listmodels: Model listing and information
-- testgen: Test generation
-- tracer: Execution tracing
 """
 
 from .base import SimpleTool

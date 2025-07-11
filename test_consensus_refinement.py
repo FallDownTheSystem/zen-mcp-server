@@ -151,7 +151,7 @@ async def test_detailed_refinement():
 
     with patch.object(tool, "get_model_provider", side_effect=mock_get_model_provider):
         # Execute workflow
-        result = await tool.execute_workflow(arguments)
+        result = await tool.execute(arguments)
         response_data = json.loads(result[0].text)
 
         # Show initial responses

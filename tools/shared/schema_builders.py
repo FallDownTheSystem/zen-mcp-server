@@ -2,8 +2,6 @@
 Core schema building functionality for Zen MCP tools.
 
 This module provides base schema generation functionality for simple tools.
-Workflow-specific schema building is located in workflow/schema_builders.py
-to maintain proper separation of concerns.
 """
 
 from typing import Any
@@ -16,7 +14,6 @@ class SchemaBuilder:
     Base schema builder for simple MCP tools.
 
     This class provides static methods to build consistent schemas for simple tools.
-    Workflow tools use WorkflowSchemaBuilder in workflow/schema_builders.py.
     """
 
     # Common field schemas that can be reused across all tool types
@@ -48,7 +45,7 @@ class SchemaBuilder:
         },
     }
 
-    # Simple tool-specific field schemas (workflow tools use relevant_files instead)
+    # Simple tool-specific field schemas
     SIMPLE_FIELD_SCHEMAS = {
         "files": {
             "type": "array",

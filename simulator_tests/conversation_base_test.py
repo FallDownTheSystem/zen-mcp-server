@@ -16,16 +16,16 @@ USAGE:
 EXAMPLE:
     class TestConversationFeature(ConversationBaseTest):
         def test_cross_tool_continuation(self):
-            # Step 1: Call precommit tool
-            result1, continuation_id = self.call_mcp_tool_direct("precommit", {
-                "path": "/path/to/repo",
-                "prompt": "Review these changes"
+            # Step 1: Call chat tool
+            result1, continuation_id = self.call_mcp_tool_direct("chat", {
+                "prompt": "Analyze this project structure",
+                "files": ["/path/to/file.py"]
             })
 
-            # Step 2: Continue with codereview tool - memory is preserved!
-            result2, _ = self.call_mcp_tool_direct("codereview", {
-                "files": ["/path/to/file.py"],
-                "prompt": "Focus on security issues",
+            # Step 2: Continue with consensus tool - memory is preserved!
+            result2, _ = self.call_mcp_tool_direct("consensus", {
+                "prompt": "Should we refactor this code?",
+                "models": [{"model": "flash"}, {"model": "gemini-pro"}],
                 "continuation_id": continuation_id
             })
 """
@@ -108,7 +108,7 @@ class ConversationBaseTest(BaseSimulatorTest):
         testing of conversation functionality.
 
         Args:
-            tool_name: Name of the tool to call (e.g., "precommit", "codereview")
+            tool_name: Name of the tool to call (e.g., "chat", "consensus")
             params: Parameters to pass to the tool
 
         Returns:

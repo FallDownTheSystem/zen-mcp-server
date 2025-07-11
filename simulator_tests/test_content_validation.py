@@ -98,22 +98,22 @@ DATABASE_CONFIG = {
                 else:
                     self.logger.warning("  ⚠️  Continuation failed")
 
-            # Test 3: Different tool with same file (new conversation)
-            self.logger.info("  3: Testing different tool with same file")
+            # Test 3: New conversation with same file (should embed file again)
+            self.logger.info("  3: Testing new conversation with same file")
 
             response3, _ = self.call_mcp_tool(
-                "codereview",
+                "chat",
                 {
                     "files": [validation_file],
-                    "prompt": "Review this configuration file",
+                    "prompt": "Tell me about the database settings in this configuration",
                     "model": "flash",
                 },
             )
 
             if response3:
-                self.logger.info("  ✅ Different tool with same file completed")
+                self.logger.info("  ✅ New conversation with same file completed")
             else:
-                self.logger.warning("  ⚠️  Different tool failed")
+                self.logger.warning("  ⚠️  New conversation failed")
 
             # Validate file processing behavior from server logs
             self.logger.info("  4: Validating file processing logs")

@@ -187,7 +187,7 @@ class TestConversationHistoryBuilding:
             thread_id="test-thread",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:00:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=turns,
             initial_context={},
         )
@@ -240,7 +240,7 @@ class TestConversationHistoryBuilding:
             thread_id="test-thread",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:01:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=turns,
             initial_context={},
         )
@@ -299,7 +299,7 @@ class TestCrossToolFileContext:
                 content="I've analyzed the source code structure",
                 timestamp="2023-01-01T00:00:00Z",  # First turn
                 files=[src_file],
-                tool_name="analyze",
+                tool_name="chat",
             ),
             ConversationTurn(
                 role="user",
@@ -312,7 +312,7 @@ class TestCrossToolFileContext:
                 content="I've generated comprehensive tests",
                 timestamp="2023-01-01T00:02:00Z",  # Third turn (2 minutes later)
                 files=[src_file, test_file],  # References both files
-                tool_name="testgen",
+                tool_name="consensus",
             ),
         ]
 
@@ -320,7 +320,7 @@ class TestCrossToolFileContext:
             thread_id="cross-tool-thread",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:02:00Z",
-            tool_name="testgen",
+            tool_name="consensus",
             turns=turns,
             initial_context={},
         )
@@ -328,9 +328,9 @@ class TestCrossToolFileContext:
         history, tokens = build_conversation_history(context)
 
         # Verify cross-tool context
-        assert "--- Turn 1 (Gemini using analyze) ---" in history
+        assert "--- Turn 1 (Gemini using chat) ---" in history
         assert "--- Turn 2 (Claude) ---" in history
-        assert "--- Turn 3 (Gemini using testgen) ---" in history
+        assert "--- Turn 3 (Gemini using consensus) ---" in history
 
         # Verify file context preservation
         assert "Files used in this turn: " + src_file in history
@@ -378,7 +378,7 @@ class TestLargeConversations:
                     content=f"Turn {turn_num} content - working on modules",
                     timestamp=f"2023-01-01T{turn_num:02d}:00:00Z",
                     files=turn_files,
-                    tool_name="analyze" if turn_num % 3 == 0 else None,
+                    tool_name="chat" if turn_num % 3 == 0 else None,
                 )
             )
 
@@ -386,7 +386,7 @@ class TestLargeConversations:
             thread_id="large-conversation",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T14:00:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=turns,
             initial_context={},
         )
@@ -488,7 +488,7 @@ class TestFailureScenarios:
             thread_id="missing-files",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:00:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=turns,
             initial_context={},
         )
@@ -527,7 +527,7 @@ class TestFailureScenarios:
             thread_id="mixed-files",
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:00:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=turns,
             initial_context={},
         )

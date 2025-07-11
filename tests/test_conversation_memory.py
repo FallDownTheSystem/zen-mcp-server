@@ -526,7 +526,7 @@ class TestConversationFlow:
             "assistant",
             "I've analyzed your codebase structure.",
             files=["/project/src/main.py", "/project/src/utils.py"],
-            tool_name="analyze",
+            tool_name="chat",
         )
         assert success is True
 
@@ -535,14 +535,14 @@ class TestConversationFlow:
             thread_id=thread_id,
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:01:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=[
                 ConversationTurn(
                     role="assistant",
                     content="I've analyzed your codebase structure.",
                     timestamp="2023-01-01T00:00:30Z",
                     files=["/project/src/main.py", "/project/src/utils.py"],
-                    tool_name="analyze",
+                    tool_name="chat",
                 )
             ],
             initial_context={"prompt": "Analyze this codebase", "relevant_files": ["/project/src/"]},
@@ -560,14 +560,14 @@ class TestConversationFlow:
             thread_id=thread_id,
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:02:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=[
                 ConversationTurn(
                     role="assistant",
                     content="I've analyzed your codebase structure.",
                     timestamp="2023-01-01T00:00:30Z",
                     files=["/project/src/main.py", "/project/src/utils.py"],
-                    tool_name="analyze",
+                    tool_name="chat",
                 ),
                 ConversationTurn(
                     role="user",
@@ -585,7 +585,7 @@ class TestConversationFlow:
             "assistant",
             "Test coverage analysis complete. Coverage is 85%.",
             files=["/project/tests/test_utils.py", "/project/coverage.html"],
-            tool_name="analyze",
+            tool_name="chat",
         )
         assert success is True
 
@@ -594,14 +594,14 @@ class TestConversationFlow:
             thread_id=thread_id,
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:03:00Z",
-            tool_name="analyze",
+            tool_name="chat",
             turns=[
                 ConversationTurn(
                     role="assistant",
                     content="I've analyzed your codebase structure.",
                     timestamp="2023-01-01T00:00:30Z",
                     files=["/project/src/main.py", "/project/src/utils.py"],
-                    tool_name="analyze",
+                    tool_name="chat",
                 ),
                 ConversationTurn(
                     role="user",
@@ -614,7 +614,7 @@ class TestConversationFlow:
                     content="Test coverage analysis complete. Coverage is 85%.",
                     timestamp="2023-01-01T00:02:30Z",
                     files=["/project/tests/test_utils.py", "/project/coverage.html"],
-                    tool_name="analyze",
+                    tool_name="chat",
                 ),
             ],
             initial_context={"prompt": "Analyze this codebase", "relevant_files": ["/project/src/"]},
@@ -623,9 +623,9 @@ class TestConversationFlow:
         history, tokens = build_conversation_history(final_context)
 
         # Verify chronological order and speaker identification
-        assert "--- Turn 1 (Gemini using analyze) ---" in history
+        assert "--- Turn 1 (Gemini using chat) ---" in history
         assert "--- Turn 2 (Claude) ---" in history
-        assert "--- Turn 3 (Gemini using analyze) ---" in history
+        assert "--- Turn 3 (Gemini using chat) ---" in history
 
         # Verify all files are preserved in chronological order
         turn_1_files = "Files used in this turn: /project/src/main.py, /project/src/utils.py"
@@ -642,9 +642,9 @@ class TestConversationFlow:
         assert "Test coverage analysis complete. Coverage is 85%." in history
 
         # Verify chronological ordering (turn 1 appears before turn 2, etc.)
-        turn_1_pos = history.find("--- Turn 1 (Gemini using analyze) ---")
+        turn_1_pos = history.find("--- Turn 1 (Gemini using chat) ---")
         turn_2_pos = history.find("--- Turn 2 (Claude) ---")
-        turn_3_pos = history.find("--- Turn 3 (Gemini using analyze) ---")
+        turn_3_pos = history.find("--- Turn 3 (Gemini using chat) ---")
 
         assert turn_1_pos < turn_2_pos < turn_3_pos
 
@@ -662,9 +662,9 @@ class TestConversationFlow:
             thread_id=thread_id,
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:00:00Z",
-            tool_name="thinkdeep",
+            tool_name="consensus",
             turns=[],
-            initial_context={"prompt": "Think about architecture"},
+            initial_context={"prompt": "Should we use microservices architecture for this project?"},
         )
         mock_client.get.return_value = initial_context.model_dump_json()
 
@@ -676,7 +676,7 @@ class TestConversationFlow:
             thread_id=thread_id,
             created_at="2023-01-01T00:00:00Z",
             last_updated_at="2023-01-01T00:01:00Z",
-            tool_name="thinkdeep",
+            tool_name="consensus",
             turns=[
                 ConversationTurn(
                     role="assistant",
@@ -684,7 +684,7 @@ class TestConversationFlow:
                     timestamp="2023-01-01T00:00:30Z",
                 )
             ],
-            initial_context={"prompt": "Think about architecture"},
+            initial_context={"prompt": "Should we use microservices architecture for this project?"},
         )
         mock_client.get.return_value = context_from_redis.model_dump_json()
 
@@ -724,7 +724,7 @@ class TestConversationFlow:
                 thread_id="test-token-limit",
                 created_at="2023-01-01T00:00:00Z",
                 last_updated_at="2023-01-01T00:01:00Z",
-                tool_name="analyze",
+                tool_name="chat",
                 turns=[
                     ConversationTurn(
                         role="user",

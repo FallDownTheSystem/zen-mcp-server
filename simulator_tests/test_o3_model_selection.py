@@ -93,33 +93,23 @@ class O3ModelSelectionTest(BaseSimulatorTest):
 
             self.logger.info("  ✅ O3-mini model call completed")
 
-            # Test 3: Another tool with O3 to ensure it works across tools
-            self.logger.info("  3: Testing O3 with different tool (codereview)")
-
-            # Create a simple test file
-            test_code = """def add(a, b):
-    return a + b
-
-def multiply(x, y):
-    return x * y
-"""
-            test_file = self.create_additional_test_file("simple_math.py", test_code)
+            # Test 3: Another O3 call to ensure consistency
+            self.logger.info("  3: Testing O3 with a different prompt")
 
             response3, _ = self.call_mcp_tool(
-                "codereview",
+                "chat",
                 {
-                    "files": [test_file],
-                    "prompt": "Quick review of this simple code",
+                    "prompt": "Quick test: What is the capital of France? Just give a brief answer.",
                     "model": "o3",
                     "temperature": 1.0,  # O3 only supports default temperature of 1.0
                 },
             )
 
             if not response3:
-                self.logger.error("  ❌ O3 with codereview tool failed")
+                self.logger.error("  ❌ O3 with different prompt failed")
                 return False
 
-            self.logger.info("  ✅ O3 with codereview tool completed")
+            self.logger.info("  ✅ O3 with different prompt completed")
 
             # Validate model usage from server logs
             self.logger.info("  4: Validating model usage in logs")
@@ -138,25 +128,19 @@ def multiply(x, y):
                 line for line in logs.split("\n") if "openai provider" in line and "Using model:" in line
             ]
 
-            # Check that we have both chat and codereview tool calls to OpenAI
+            # Check that we have chat tool calls to OpenAI
             chat_openai_logs = [line for line in logs.split("\n") if "Sending request to openai API for chat" in line]
 
-            codereview_openai_logs = [
-                line for line in logs.split("\n") if "Sending request to openai API for codereview" in line
-            ]
-
-            # Validation criteria - we expect 3 OpenAI calls (2 chat + 1 codereview)
+            # Validation criteria - we expect 3 OpenAI calls (all chat)
             openai_api_called = len(openai_api_logs) >= 3  # Should see 3 OpenAI API calls
             openai_model_usage = len(openai_model_logs) >= 3  # Should see 3 model usage logs
             openai_responses_received = len(openai_response_logs) >= 3  # Should see 3 responses
-            chat_calls_to_openai = len(chat_openai_logs) >= 2  # Should see 2 chat calls (o3 + o3-mini)
-            codereview_calls_to_openai = len(codereview_openai_logs) >= 1  # Should see 1 codereview call (o3)
+            chat_calls_to_openai = len(chat_openai_logs) >= 3  # Should see 3 chat calls (o3, o3-mini, o3 again)
 
             self.logger.info(f"   OpenAI API call logs: {len(openai_api_logs)}")
             self.logger.info(f"   OpenAI model usage logs: {len(openai_model_logs)}")
             self.logger.info(f"   OpenAI response logs: {len(openai_response_logs)}")
             self.logger.info(f"   Chat calls to OpenAI: {len(chat_openai_logs)}")
-            self.logger.info(f"   Codereview calls to OpenAI: {len(codereview_openai_logs)}")
 
             # Log sample evidence for debugging
             if self.verbose and openai_api_logs:
@@ -175,7 +159,6 @@ def multiply(x, y):
                 ("OpenAI model usage logged", openai_model_usage),
                 ("OpenAI responses received", openai_responses_received),
                 ("Chat tool used OpenAI", chat_calls_to_openai),
-                ("Codereview tool used OpenAI", codereview_calls_to_openai),
             ]
 
             passed_criteria = sum(1 for _, passed in success_criteria if passed)
@@ -240,32 +223,23 @@ def multiply(x, y):
 
             self.logger.info("  ✅ O3-mini model call via OpenRouter completed")
 
-            # Test 3: Codereview with O3 via OpenRouter
-            self.logger.info("  3: Testing O3 with codereview tool via OpenRouter")
-
-            test_code = """def add(a, b):
-    return a + b
-
-def multiply(x, y):
-    return x * y
-"""
-            test_file = self.create_additional_test_file("simple_math.py", test_code)
+            # Test 3: Another O3 call via OpenRouter
+            self.logger.info("  3: Testing O3 with different prompt via OpenRouter")
 
             response3, _ = self.call_mcp_tool(
-                "codereview",
+                "chat",
                 {
-                    "files": [test_file],
-                    "prompt": "Quick review of this simple code",
+                    "prompt": "Quick test: What is the capital of France? Just give a brief answer.",
                     "model": "o3",
                     "temperature": 1.0,
                 },
             )
 
             if not response3:
-                self.logger.error("  ❌ O3 with codereview tool via OpenRouter failed")
+                self.logger.error("  ❌ O3 with different prompt via OpenRouter failed")
                 return False
 
-            self.logger.info("  ✅ O3 with codereview tool via OpenRouter completed")
+            self.logger.info("  ✅ O3 with different prompt via OpenRouter completed")
 
             # Validate OpenRouter usage in logs
             self.logger.info("  4: Validating OpenRouter usage in logs")

@@ -330,23 +330,10 @@ python -m json.tool .vscode/mcp.json
 
 ## Available Tools
 
-The Zen MCP Server provides these tools when properly configured:
+The Simplified Zen MCP Server provides these tools when properly configured:
 
 - **chat** - General AI conversation and collaboration
-- **thinkdeep** - Multi-stage investigation and reasoning  
-- **planner** - Interactive sequential planning
-- **consensus** - Multi-model consensus workflow
-- **codereview** - Comprehensive code review
-- **debug** - Root cause analysis and debugging
-- **analyze** - Code analysis and assessment
-- **refactor** - Refactoring analysis and suggestions
-- **secaudit** - Security audit workflow
-- **testgen** - Test generation with edge cases
-- **docgen** - Documentation generation
-- **tracer** - Code tracing and dependency mapping
-- **precommit** - Pre-commit validation workflow
-- **listmodels** - Available AI models information
-- **version** - Server version and configuration
+- **consensus** - Multi-model consensus workflow with cross-model feedback
 
 ## Performance Notes
 

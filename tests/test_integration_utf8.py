@@ -76,7 +76,7 @@ def test_utf8_json_encoding():
             },
         },
         "outils": [
-            {"nom": "analyse", "description": "Analyse architecturale avancée"},
+            {"nom": "chat", "description": "Chat conversationnel avancé"},
             {"nom": "révision", "description": "Révision de code automatisée"},
             {"nom": "génération", "description": "Génération de documentation"},
         ],
@@ -338,7 +338,7 @@ Pour plus de détails sur chaque problème identifié, consultez les recommandat
 *Analyse générée automatiquement par MCP Zen* 🤖
 """,
             "metadata": {
-                "tool_name": "analyze",
+                "tool_name": "chat",
                 "execution_time": 2.5,
                 "locale": "fr-FR",
                 "timestamp": "2024-01-01T12:00:00Z",

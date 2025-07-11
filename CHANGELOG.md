@@ -1,5 +1,31 @@
 # Changelog
 
+## [6.2.6] - 2025-07-12
+
+### Removed
+- **Test Files for Deleted Tools**: Removed 3 simulator test files that tested non-existent tools
+  - `test_line_number_validation.py` - Tested removed analyze/refactor tools
+  - `test_openrouter_fallback.py` - Tested removed codereview/analyze/debug tools  
+  - `test_ollama_custom_url.py` - Tested removed analyze tool
+
+### Changed
+- **Test Suite Cleanup**: Updated 12 test files to remove references to deleted tools
+  - Replaced all mock usage of removed tools (analyze, thinkdeep, testgen, etc.) with chat or consensus
+  - Updated test assertions and mock data to reflect only available tools
+  - Fixed `test_consensus_refinement.py` to use `execute()` instead of non-existent `execute_workflow()`
+- **Configuration Cleanup**: Removed unused constants and references
+  - Removed `DEFAULT_THINKING_MODE_THINKDEEP` constant from config.py
+  - Updated server.py comments to remove references to `/zen:thinkdeeper` shortcut
+  - Cleaned up import statements for removed constants
+- **Documentation Updates**: 
+  - Updated `docker/README.md` to list only chat and consensus tools
+  - Updated `tools/simple/__init__.py` docstring to remove references to deleted tools
+  - Removed workflow-related comments from `tools/shared/schema_builders.py`
+
+### Fixed
+- **Import Errors**: Fixed `simulator_tests/__init__.py` by commenting out imports for deleted test files
+- **Test Runner**: Fixed `communication_simulator_test.py` quick test list to use existing test names
+
 ## [6.2.5] - 2025-07-11
 
 ### Changed
