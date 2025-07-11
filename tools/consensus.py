@@ -271,35 +271,61 @@ class ConsensusTool(SimpleTool):
                         else:
                             refined_responses.append(result)
 
+            # Prepare final responses - use refined if available, otherwise initial
+            final_responses = []
+
+            # Build a map of refined responses by model name for easy lookup
+            refined_by_model = {r["model"]: r for r in refined_responses if r.get("status") == "success"}
+
+            # For each successful initial response, use refined if available
+            for initial in successful_initial:
+                if initial.get("status") == "success":
+                    model_name = initial["model"]
+                    if model_name in refined_by_model:
+                        # Use refined response but with simplified structure
+                        refined = refined_by_model[model_name]
+                        final_responses.append(
+                            {
+                                "model": model_name,
+                                "status": "success",
+                                "response": refined["refined_response"],
+                                "metadata": refined["metadata"],
+                            }
+                        )
+                    else:
+                        # Use initial response
+                        final_responses.append(
+                            {
+                                "model": model_name,
+                                "status": "success",
+                                "response": initial["response"],
+                                "metadata": initial["metadata"],
+                            }
+                        )
+
             # Prepare comprehensive response
             response_data = {
                 "status": "consensus_complete",
                 "consensus_complete": True,
                 "initial_prompt": self.initial_prompt,
                 "models_consulted": len(self.models_to_consult),
-                "successful_initial_responses": len(successful_initial),
-                "refined_responses": len(refined_responses),
+                "successful_responses": len(final_responses),
                 "failed_models": failed_models,
                 "cross_feedback_enabled": request.enable_cross_feedback,
-                "phases": {"initial": successful_initial, "refined": refined_responses if refined_responses else None},
+                "responses": final_responses,
                 "next_steps": (
                     "PARALLEL CONSENSUS GATHERING IS COMPLETE. Please synthesize the responses:\n"
-                    "1. Review initial responses from all models\n"
-                    + (
-                        "2. Consider refined responses that incorporate cross-model insights\n"
-                        if refined_responses
-                        else ""
-                    )
-                    + "3. Identify key points of AGREEMENT across models\n"
-                    "4. Note key points of DISAGREEMENT and underlying reasons\n"
-                    "5. Provide your final recommendation based on the collective insights\n"
-                    "6. Suggest specific, actionable next steps"
+                    "1. Review the responses from all models\n"
+                    "2. Identify key points of AGREEMENT across models\n"
+                    "3. Note key points of DISAGREEMENT and underlying reasons\n"
+                    "4. Provide your final recommendation based on the collective insights\n"
+                    "5. Suggest specific, actionable next steps"
                 ),
                 "metadata": {
                     "tool_name": self.get_name(),
                     "workflow_type": "parallel_consensus_with_feedback" if refined_responses else "parallel_consensus",
                     "total_models": len(self.models_to_consult),
-                    "successful_models": len(successful_initial),
+                    "successful_models": len(final_responses),
                     "models_with_refinements": len(refined_responses),
                 },
             }
@@ -476,9 +502,13 @@ After reviewing these other perspectives, please provide a refined response that
 4. Highlights critical disagreements and their implications
 5. Updates your recommendation if the collective insights warrant it
 
-Be specific about which insights from other models influenced your thinking and why.
-Your refined response should be comprehensive but concise, focusing on how the
-cross-model insights improve the overall analysis.
+IMPORTANT: This refined response will be the ONLY response shown to the user from your model.
+Your initial response will NOT be shown. Therefore, ensure your refined response is:
+- Complete and self-contained (don't reference "as I mentioned earlier")
+- Comprehensive, covering all aspects of the question
+- Clear about which insights from other models influenced your thinking
+
+Your refined response should be thorough while incorporating the cross-model insights.
 """
 
         return prompt

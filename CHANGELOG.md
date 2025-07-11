@@ -1,5 +1,15 @@
 # Changelog
 
+## [6.2.4] - 2025-07-11
+
+### Improved
+- **Consensus Tool Response Format**: Simplified consensus tool output for better token efficiency
+  - Now returns single `responses` array with only the final response from each model
+  - Automatically uses refined response when cross-feedback is enabled, otherwise uses initial response
+  - Removed separate `phases.initial` and `phases.refined` arrays to reduce token usage by ~50%
+  - Updated refinement prompt to ensure models provide complete, self-contained responses
+  - No more duplicate content between initial and refined phases
+
 ## [6.2.3] - 2025-07-11
 
 ### Added
