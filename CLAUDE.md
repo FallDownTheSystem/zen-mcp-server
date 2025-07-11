@@ -1,6 +1,6 @@
-# Claude Development Guide for Zen MCP Server
+# Claude Development Guide for Zen MCP Server - Simplified
 
-This file contains essential commands and workflows for developing and maintaining the Zen MCP Server when working with Claude. Use these instructions to efficiently run quality checks, manage the server, check logs, and run tests.
+This file contains essential commands and workflows for developing and maintaining the Simplified Zen MCP Server when working with Claude. This version includes only the Chat and Consensus tools.
 
 ## Quick Reference Commands
 
@@ -86,38 +86,7 @@ tail -f logs/mcp_activity.log
 tail -f logs/mcp_activity.log | grep -E "(TOOL_CALL|TOOL_COMPLETED|ERROR|WARNING)"
 ```
 
-#### Available Log Files
-
-**Current log files (with proper rotation):**
-```bash
-# Main server log (all activity including debug info) - 20MB max, 10 backups
-tail -f logs/mcp_server.log
-
-# Tool activity only (TOOL_CALL, TOOL_COMPLETED, etc.) - 20MB max, 5 backups  
-tail -f logs/mcp_activity.log
-```
-
-**For programmatic log analysis (used by tests):**
-```python
-# Import the LogUtils class from simulator tests
-from simulator_tests.log_utils import LogUtils
-
-# Get recent logs
-recent_logs = LogUtils.get_recent_server_logs(lines=500)
-
-# Check for errors
-errors = LogUtils.check_server_logs_for_errors()
-
-# Search for specific patterns
-matches = LogUtils.search_logs_for_pattern("TOOL_CALL.*debug")
-```
-
 ### Testing
-
-Simulation tests are available to test the MCP server in a 'live' scenario, using your configured
-API keys to ensure the models are working and the server is able to communicate back and forth. 
-
-**IMPORTANT**: After any code changes, restart your Claude session for the changes to take effect.
 
 #### Run All Simulator Tests
 ```bash
@@ -138,55 +107,24 @@ python communication_simulator_test.py --quick --verbose
 ```
 
 **Quick mode runs these 6 essential tests:**
-- `cross_tool_continuation` - Cross-tool conversation memory testing (chat, thinkdeep, codereview, analyze, debug)
-- `conversation_chain_validation` - Core conversation threading and memory validation
-- `consensus_workflow_accurate` - Consensus tool with flash model and stance testing
-- `codereview_validation` - CodeReview tool with flash model and multi-step workflows
-- `planner_validation` - Planner tool with flash model and complex planning workflows
-- `token_allocation_validation` - Token allocation and conversation history buildup testing
-
-**Why these 6 tests:** They cover the core functionality including conversation memory (`utils/conversation_memory.py`), chat tool functionality, file processing and deduplication, model selection (flash/flashlite/o3), and cross-tool conversation workflows. These tests validate the most critical parts of the system in minimal time.
-
-**Note:** Some workflow tools (analyze, codereview, planner, consensus, etc.) require specific workflow parameters and may need individual testing rather than quick mode testing.
+- `basic_conversation` - Basic chat functionality
+- `content_validation` - Content validation and deduplication
+- `model_thinking_config` - Flash/flashlite model testing
+- `o3_model_selection` - O3 model selection testing
+- `consensus_workflow_accurate` - Consensus tool testing
+- `chat_validation` - Chat tool validation
 
 #### Run Individual Simulator Tests (For Detailed Testing)
 ```bash
 # List all available tests
 python communication_simulator_test.py --list-tests
 
-# RECOMMENDED: Run tests individually for better isolation and debugging
+# Run a single test individually
 python communication_simulator_test.py --individual basic_conversation
-python communication_simulator_test.py --individual content_validation
-python communication_simulator_test.py --individual cross_tool_continuation
-python communication_simulator_test.py --individual memory_validation
-
-# Run multiple specific tests
-python communication_simulator_test.py --tests basic_conversation content_validation
 
 # Run individual test with verbose output for debugging
-python communication_simulator_test.py --individual memory_validation --verbose
+python communication_simulator_test.py --individual consensus_workflow_accurate --verbose
 ```
-
-Available simulator tests include:
-- `basic_conversation` - Basic conversation flow with chat tool
-- `content_validation` - Content validation and duplicate detection
-- `per_tool_deduplication` - File deduplication for individual tools
-- `cross_tool_continuation` - Cross-tool conversation continuation scenarios
-- `cross_tool_comprehensive` - Comprehensive cross-tool file deduplication and continuation
-- `line_number_validation` - Line number handling validation across tools
-- `memory_validation` - Conversation memory validation
-- `model_thinking_config` - Model-specific thinking configuration behavior
-- `o3_model_selection` - O3 model selection and usage validation
-- `ollama_custom_url` - Ollama custom URL endpoint functionality
-- `openrouter_fallback` - OpenRouter fallback behavior when only provider
-- `openrouter_models` - OpenRouter model functionality and alias mapping
-- `token_allocation_validation` - Token allocation and conversation history validation
-- `testgen_validation` - TestGen tool validation with specific test function
-- `refactor_validation` - Refactor tool validation with codesmells
-- `conversation_chain_validation` - Conversation chain and threading validation
-- `consensus_stance` - Consensus tool validation with stance steering (for/against/neutral)
-
-**Note**: All simulator tests should be run individually for optimal testing and better error isolation.
 
 #### Run Unit Tests Only
 ```bash
@@ -194,45 +132,11 @@ Available simulator tests include:
 python -m pytest tests/ -v -m "not integration"
 
 # Run specific test file
-python -m pytest tests/test_refactor.py -v
-
-# Run specific test function
-python -m pytest tests/test_refactor.py::TestRefactorTool::test_format_response -v
+python -m pytest tests/test_chat_simple.py -v
 
 # Run tests with coverage
 python -m pytest tests/ --cov=. --cov-report=html -m "not integration"
 ```
-
-#### Run Integration Tests (Uses Free Local Models)
-
-**Setup Requirements:**
-```bash
-# 1. Install Ollama (if not already installed)
-# Visit https://ollama.ai or use brew install ollama
-
-# 2. Start Ollama service
-ollama serve
-
-# 3. Pull a model (e.g., llama3.2)
-ollama pull llama3.2
-
-# 4. Set environment variable for custom provider
-export CUSTOM_API_URL="http://localhost:11434"
-```
-
-**Run Integration Tests:**
-```bash
-# Run integration tests that make real API calls to local models
-python -m pytest tests/ -v -m "integration"
-
-# Run specific integration test
-python -m pytest tests/test_prompt_regression.py::TestPromptIntegration::test_chat_normal_prompt -v
-
-# Run all tests (unit + integration)
-python -m pytest tests/ -v
-```
-
-**Note**: Integration tests use the local-llama model via Ollama, which is completely FREE to run unlimited times. Requires `CUSTOM_API_URL` environment variable set to your local Ollama endpoint. They can be run safely in CI/CD but are excluded from code quality checks to keep them fast.
 
 ### Development Workflow
 
@@ -245,16 +149,29 @@ python -m pytest tests/ -v
 1. Run quality checks again: `./code_quality_checks.sh`
 2. Run integration tests locally: `./run_integration_tests.sh`
 3. Run quick test mode for fast validation: `python communication_simulator_test.py --quick`
-4. Run relevant specific simulator tests if needed: `python communication_simulator_test.py --individual <test_name>`
-5. Check logs for any issues: `tail -n 100 logs/mcp_server.log`
-6. Restart Claude session to use updated code
+4. Check logs for any issues: `tail -n 100 logs/mcp_server.log`
+5. Restart Claude session to use updated code
 
 #### Before Committing/PR
 1. Final quality check: `./code_quality_checks.sh`
 2. Run integration tests: `./run_integration_tests.sh`
 3. Run quick test mode: `python communication_simulator_test.py --quick`
-4. Run full simulator test suite (optional): `./run_integration_tests.sh --with-simulator`
-5. Verify all tests pass 100%
+4. Verify all tests pass 100%
+
+### Available Tools
+
+This simplified version includes only two tools:
+
+1. **Chat Tool** (`chat`)
+   - General conversational AI
+   - File and image support
+   - Uses SimpleTool architecture
+
+2. **Consensus Tool** (`consensus`)
+   - Multi-model consensus gathering
+   - Sequential model consultation
+   - Stance-based analysis (for/against/neutral)
+   - Uses WorkflowTool architecture
 
 ### Common Troubleshooting
 
@@ -276,14 +193,11 @@ which python
 # First try quick test mode to see if it's a general issue
 python communication_simulator_test.py --quick --verbose
 
-# Run individual failing test with verbose output
-python communication_simulator_test.py --individual <test_name> --verbose
-
 # Check server logs during test execution
 tail -f logs/mcp_server.log
 
 # Run tests with debug output
-LOG_LEVEL=DEBUG python communication_simulator_test.py --individual <test_name>
+LOG_LEVEL=DEBUG python communication_simulator_test.py --individual basic_conversation
 ```
 
 #### Linting Issues
@@ -306,15 +220,15 @@ isort --check-only .
 - `communication_simulator_test.py` - End-to-end testing framework
 - `simulator_tests/` - Individual test modules
 - `tests/` - Unit test suite
-- `tools/` - MCP tool implementations
+- `tools/` - MCP tool implementations (only chat.py and consensus.py)
 - `providers/` - AI provider implementations
-- `systemprompts/` - System prompt definitions
+- `systemprompts/` - System prompt definitions (only chat and consensus prompts)
 - `logs/` - Server log files
 
 ### Environment Requirements
 
-- Python 3.9+ with virtual environment
+- Python 3.11+ with virtual environment
 - All dependencies from `requirements.txt` installed
 - Proper API keys configured in `.env` file
 
-This guide provides everything needed to efficiently work with the Zen MCP Server codebase using Claude. Always run quality checks before and after making changes to ensure code integrity.
+This guide provides everything needed to efficiently work with the Simplified Zen MCP Server codebase using Claude.
