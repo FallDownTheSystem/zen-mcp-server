@@ -17,8 +17,9 @@ import os
 __version__ = "6.2.3"
 # Last update date in ISO format
 __updated__ = "2025-07-11"
-# Primary maintainer
+# Original author and fork information
 __author__ = "Fahad Gilani"
+__forked_by__ = "FallDownTheSystem"
 
 # Model configuration
 # DEFAULT_MODEL: The default model used for all AI operations
@@ -41,35 +42,11 @@ IS_AUTO_MODE = DEFAULT_MODEL.lower() == "auto"
 # - Clean separation of concerns (providers own their model definitions)
 
 
-# Temperature defaults for different tool types
-# Temperature controls the randomness/creativity of model responses
-# Lower values (0.0-0.3) produce more deterministic, focused responses
-# Higher values (0.7-1.0) produce more creative, varied responses
-
-# TEMPERATURE_ANALYTICAL: Used for tasks requiring precision and consistency
-# Ideal for code review, debugging, and error analysis where accuracy is critical
-TEMPERATURE_ANALYTICAL = 0.2  # For code review, debugging
-
-# TEMPERATURE_BALANCED: Middle ground for general conversations
-# Provides a good balance between consistency and helpful variety
-TEMPERATURE_BALANCED = 0.5  # For general chat
-
-# TEMPERATURE_CREATIVE: Higher temperature for exploratory tasks
-# Used when brainstorming, exploring alternatives, or architectural discussions
-TEMPERATURE_CREATIVE = 0.7  # For architecture, deep thinking
-
 # Thinking Mode Defaults
 # DEFAULT_THINKING_MODE_THINKDEEP: Default thinking depth for extended reasoning tool
 # Higher modes use more computational budget but provide deeper analysis
 DEFAULT_THINKING_MODE_THINKDEEP = os.getenv("DEFAULT_THINKING_MODE_THINKDEEP", "high")
 
-# Consensus Tool Defaults
-# Consensus timeout and rate limiting settings
-DEFAULT_CONSENSUS_TIMEOUT = 120.0  # 2 minutes per model
-DEFAULT_CONSENSUS_MAX_INSTANCES_PER_COMBINATION = 2
-
-# NOTE: Consensus tool now uses sequential processing for MCP compatibility
-# Concurrent processing was removed to avoid async pattern violations
 
 # MCP Protocol Transport Limits
 #
@@ -109,32 +86,20 @@ DEFAULT_CONSENSUS_MAX_INSTANCES_PER_COMBINATION = 2
 # processing to use full model context windows (200K-1M+ tokens).
 
 
-def _calculate_mcp_prompt_limit() -> int:
-    """
-    Calculate MCP prompt size limit based on MAX_MCP_OUTPUT_TOKENS environment variable.
-
-    Returns:
-        Maximum character count for user input prompts
-    """
-    # Check for Claude's MAX_MCP_OUTPUT_TOKENS environment variable
-    max_tokens_str = os.getenv("MAX_MCP_OUTPUT_TOKENS")
-
-    if max_tokens_str:
-        try:
-            max_tokens = int(max_tokens_str)
-            # Allocate 60% of tokens for input, convert to characters (~4 chars per token)
-            input_token_budget = int(max_tokens * 0.6)
-            character_limit = input_token_budget * 4
-            return character_limit
-        except (ValueError, TypeError):
-            # Fall back to default if MAX_MCP_OUTPUT_TOKENS is not a valid integer
-            pass
-
-    # Default fallback: 60,000 characters (equivalent to ~15k tokens input of 25k total)
-    return 60_000
-
-
-MCP_PROMPT_SIZE_LIMIT = _calculate_mcp_prompt_limit()
+# Calculate MCP prompt size limit based on MAX_MCP_OUTPUT_TOKENS if available
+max_tokens_str = os.getenv("MAX_MCP_OUTPUT_TOKENS")
+if max_tokens_str:
+    try:
+        max_tokens = int(max_tokens_str)
+        # Allocate 60% of tokens for input, convert to characters (~4 chars per token)
+        input_token_budget = int(max_tokens * 0.6)
+        MCP_PROMPT_SIZE_LIMIT = input_token_budget * 4
+    except (ValueError, TypeError):
+        # Fall back to default if MAX_MCP_OUTPUT_TOKENS is not a valid integer
+        MCP_PROMPT_SIZE_LIMIT = 60_000
+else:
+    # Default: 60,000 characters (equivalent to ~15k tokens input of 25k total)
+    MCP_PROMPT_SIZE_LIMIT = 60_000
 
 # Language/Locale Configuration
 # LOCALE: Language/locale specification for AI responses

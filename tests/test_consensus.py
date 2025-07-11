@@ -112,9 +112,7 @@ class TestConsensusTool:
     def test_default_temperature(self):
         """Test that consensus uses analytical temperature."""
         tool = ConsensusTool()
-        from config import TEMPERATURE_ANALYTICAL
-
-        assert tool.get_default_temperature() == TEMPERATURE_ANALYTICAL
+        assert tool.get_default_temperature() == 0.2
 
     def test_model_category(self):
         """Test that consensus requires extended reasoning models."""

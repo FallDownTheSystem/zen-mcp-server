@@ -9,6 +9,20 @@
   - Implemented in SimpleTool base class, applies to both Chat and Consensus tools
   - Includes timing even for error responses to track failed model performance
 
+### Changed
+- **Fork Attribution**: Added `__forked_by__ = "FallDownTheSystem"` to config.py alongside original author
+- **Temperature as Parameter**: Moved temperature from hardcoded config values to tool request parameters
+  - Chat tool now has `temperature` parameter with default 0.5 (balanced responses)
+  - Consensus tool now has `temperature` parameter with default 0.2 (analytical/focused responses)
+  - Removed `TEMPERATURE_ANALYTICAL` and `TEMPERATURE_BALANCED` from config.py
+  - Users can now customize temperature per request instead of using fixed values
+
+### Removed
+- **Unused Config Variables**: Cleaned up config.py by removing unused variables
+  - Removed `DEFAULT_CONSENSUS_TIMEOUT` and `DEFAULT_CONSENSUS_MAX_INSTANCES_PER_COMBINATION` (obsolete)
+  - Simplified MCP_PROMPT_SIZE_LIMIT calculation by removing unused function
+  - Updated tests to reflect the changes
+
 ## [6.2.2] - 2025-07-11
 
 ### Fixed

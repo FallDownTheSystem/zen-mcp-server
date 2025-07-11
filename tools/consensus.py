@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
 from mcp.types import TextContent
 
-from config import TEMPERATURE_ANALYTICAL
 from systemprompts import CONSENSUS_PROMPT
 from tools.shared.base_models import ToolRequest
 
@@ -66,6 +65,12 @@ class ConsensusRequest(ToolRequest):
     cross_feedback_prompt: str | None = Field(
         default=None,
         description=CONSENSUS_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+    )
+    temperature: float | None = Field(
+        0.2,
+        ge=0.0,
+        le=1.0,
+        description="Temperature for response (0.0 to 1.0). Default: 0.2 for analytical/focused responses.",
     )
 
     @model_validator(mode="after")
@@ -109,7 +114,8 @@ class ConsensusTool(SimpleTool):
         return CONSENSUS_PROMPT
 
     def get_default_temperature(self) -> float:
-        return TEMPERATURE_ANALYTICAL
+        # Default is now defined in ConsensusRequest model
+        return 0.2
 
     def get_model_category(self) -> ToolModelCategory:
         """Consensus workflow requires extended reasoning"""
@@ -163,6 +169,13 @@ class ConsensusTool(SimpleTool):
                 "continuation_id": {
                     "type": "string",
                     "description": "Thread continuation ID for multi-turn conversations.",
+                },
+                "temperature": {
+                    "type": "number",
+                    "description": "Temperature for response (0.0 to 1.0). Default: 0.2 for analytical/focused responses.",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.2,
                 },
             },
             "required": ["prompt", "models"],
@@ -333,7 +346,7 @@ class ConsensusTool(SimpleTool):
                 prompt=prompt,
                 model_name=model_name,
                 system_prompt=system_prompt,
-                temperature=0.2,  # Low temperature for consistency
+                temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode="medium",
                 images=request.images if request.images else None,
             )
@@ -387,7 +400,7 @@ class ConsensusTool(SimpleTool):
                 prompt=feedback_prompt,
                 model_name=model_name,
                 system_prompt=system_prompt,
-                temperature=0.2,  # Low temperature for consistency
+                temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode="medium",
                 images=request.images if request.images else None,
             )

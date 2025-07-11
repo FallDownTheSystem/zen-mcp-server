@@ -13,7 +13,6 @@ from pydantic import Field
 if TYPE_CHECKING:
     from tools.models import ToolModelCategory
 
-from config import TEMPERATURE_BALANCED
 from systemprompts import CHAT_PROMPT
 from tools.shared.base_models import ToolRequest
 
@@ -33,6 +32,9 @@ class ChatRequest(ToolRequest):
     prompt: str = Field(..., description=CHAT_FIELD_DESCRIPTIONS["prompt"])
     files: Optional[list[str]] = Field(default_factory=list, description=CHAT_FIELD_DESCRIPTIONS["files"])
     images: Optional[list[str]] = Field(default_factory=list, description=CHAT_FIELD_DESCRIPTIONS["images"])
+    temperature: float | None = Field(
+        0.5, ge=0.0, le=1.0, description="Temperature for response (0.0 to 1.0). Default: 0.5 for balanced responses."
+    )
 
 
 class ChatTool(SimpleTool):
@@ -60,7 +62,8 @@ class ChatTool(SimpleTool):
         return CHAT_PROMPT
 
     def get_default_temperature(self) -> float:
-        return TEMPERATURE_BALANCED
+        # Default is now defined in ChatRequest model
+        return 0.5
 
     def get_model_category(self) -> "ToolModelCategory":
         """Chat prioritizes fast responses and cost efficiency"""
@@ -103,9 +106,10 @@ class ChatTool(SimpleTool):
                 "model": self.get_model_field_schema(),
                 "temperature": {
                     "type": "number",
-                    "description": "Response creativity (0-1, default 0.5)",
-                    "minimum": 0,
-                    "maximum": 1,
+                    "description": "Temperature for response (0.0 to 1.0). Default: 0.5 for balanced responses.",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.5,
                 },
                 "thinking_mode": {
                     "type": "string",
