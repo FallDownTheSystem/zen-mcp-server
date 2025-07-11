@@ -591,9 +591,11 @@ class BaseTool(ABC):
         Raises:
             ValueError: If content exceeds size limit
         """
-        is_valid, token_count = check_token_limit(content, MCP_PROMPT_SIZE_LIMIT)
+        # Convert character limit to approximate token limit (4 chars ≈ 1 token)
+        token_limit = MCP_PROMPT_SIZE_LIMIT // 4
+        is_valid, token_count = check_token_limit(content, token_limit)
         if not is_valid:
-            error_msg = f"~{token_count:,} tokens. Maximum is {MCP_PROMPT_SIZE_LIMIT:,} tokens."
+            error_msg = f"~{token_count:,} tokens. Maximum is {token_limit:,} tokens."
             logger.error(f"{self.name} tool {content_type.lower()} validation failed: {error_msg}")
             raise ValueError(f"{content_type} too large: {error_msg}")
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.2.1] - 2025-07-11
+
+### Fixed
+- **Token/Character Limit Mismatch**: Fixed validation bug where character limits were compared against token counts
+  - `_validate_token_limit` now correctly converts character limit to token limit (÷4)
+  - Prevents false validation failures when using large file contexts
+  - Fixes issue where ~15k token files would fail against 60k character limit
+  - Added comprehensive tests to prevent regression
+
 ## [2.2.0] - 2025-07-11
 
 ### Changed
