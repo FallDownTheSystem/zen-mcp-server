@@ -981,7 +981,7 @@ function Show-Help {
     Write-Host "  .\run-server.ps1 -ClearCache  Clear Python cache (fixes import issues)"
     Write-Host ""
     Write-Host "For more information, visit:"
-    Write-Host "  https://github.com/BeehiveInnovations/zen-mcp-server"
+    Write-Host "  https://github.com/FallDownTheSystem/zen-mcp-server"
     Write-Host ""
 }
 

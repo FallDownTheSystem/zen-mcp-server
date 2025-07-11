@@ -27,7 +27,7 @@ npm install -g @anthropic-ai/claude-code
    cd ~
    
    # Clone the repository
-   git clone https://github.com/BeehiveInnovations/zen-mcp-server.git
+   git clone https://github.com/FallDownTheSystem/zen-mcp-server.git
    cd zen-mcp-server
    ```
 

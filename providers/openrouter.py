@@ -25,7 +25,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
 
     # Custom headers required by OpenRouter
     DEFAULT_HEADERS = {
-        "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "https://github.com/BeehiveInnovations/zen-mcp-server"),
+        "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "https://github.com/FallDownTheSystem/zen-mcp-server"),
         "X-Title": os.getenv("OPENROUTER_TITLE", "Zen MCP Server"),
     }
 

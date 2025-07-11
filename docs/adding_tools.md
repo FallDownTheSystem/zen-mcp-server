@@ -1,24 +1,22 @@
 # Adding Tools to Zen MCP Server
 
-This guide explains how to add new tools to the Zen MCP Server. Tools enable Claude to interact with AI models for specialized tasks like code analysis, debugging, and collaborative thinking.
+This guide explains how to add new tools to the Zen MCP Server. Tools enable Claude to interact with AI models for specialized tasks.
 
-## Tool Types
+## Tool Architecture
 
-Zen supports two tool architectures:
+Zen uses a simplified tool architecture:
 
 ### Simple Tools
 - **Pattern**: Single request → AI response → formatted output
-- **Use cases**: Chat, quick analysis, straightforward tasks
+- **Use cases**: Chat, consensus gathering, any AI-powered task
 - **Benefits**: Clean, lightweight, easy to implement
 - **Base class**: `SimpleTool` (`tools/simple/base.py`)
 
-### Multi-step Workflow Tools  
-- **Pattern**: Step-by-step investigation with Claude pausing between steps to investigate
-- **Use cases**: Complex analysis, debugging, code review, security audits
-- **Benefits**: Systematic investigation, expert analysis integration, better results for complex tasks
-- **Base class**: `WorkflowTool` (`tools/workflow/base.py`)
-
-**Recommendation**: Use workflow tools for most complex analysis tasks as they produce significantly better results by forcing systematic investigation.
+All tools in the simplified Zen MCP Server inherit from `SimpleTool`, which provides:
+- Automatic conversation memory management
+- File handling and deduplication
+- Model resolution and validation
+- Consistent response formatting
 
 ## Implementation Guide
 
@@ -52,41 +50,40 @@ class ChatTool(SimpleTool):
         return self.prepare_chat_style_prompt(request)
 ```
 
-### Workflow Tool Example
+### Creating a Custom Request Model (Optional)
 
-```python  
-from tools.workflow.base import WorkflowTool
+For tools with specific requirements, you can create a custom request model:
 
-class DebugTool(WorkflowTool):
-    def get_name(self) -> str:
-        return "debug"
+```python
+from tools.shared.base_models import ToolRequest
+from pydantic import Field
+
+class ConsensusRequest(ToolRequest):
+    """Request model for consensus tool"""
     
-    def get_description(self) -> str:
-        return "DEBUG & ROOT CAUSE ANALYSIS - Step-by-step investigation..."
+    prompt: str = Field(..., description="The question to gather consensus on")
+    models: list[dict] = Field(..., description="List of models to consult")
+    enable_cross_feedback: bool = Field(default=True, description="Enable refinement phase")
     
-    def get_required_actions(self, step_number, confidence, findings, total_steps):
-        if step_number == 1:
-            return ["Search for code related to issue", "Examine relevant files"]
-        return ["Trace execution flow", "Verify hypothesis with code evidence"]
-    
-    def should_call_expert_analysis(self, consolidated_findings):
-        return len(consolidated_findings.relevant_files) > 0
-    
-    def prepare_expert_analysis_context(self, consolidated_findings):
-        return f"Investigation findings: {consolidated_findings.findings}"
+class ConsensusTool(SimpleTool):
+    def get_request_model(self):
+        return ConsensusRequest
 ```
 
 ## Key Implementation Points
 
-### Simple Tools
-- Inherit from `SimpleTool` 
-- Implement: `get_name()`, `get_description()`, `get_tool_fields()`, `prepare_prompt()`
-- Override: `get_required_fields()`, `format_response()` (optional)
+### Required Methods
+- `get_name()`: Tool identifier used in MCP calls
+- `get_description()`: Brief description for tool selection
+- `get_tool_fields()`: Define input fields and their types
+- `get_required_fields()`: List fields that must be provided
+- `prepare_prompt()` or `execute()`: Process the request
 
-### Workflow Tools  
-- Inherit from `WorkflowTool`
-- Implement: `get_name()`, `get_description()`, `get_required_actions()`, `should_call_expert_analysis()`, `prepare_expert_analysis_context()`
-- Override: `get_tool_fields()` (optional)
+### Optional Methods
+- `get_request_model()`: Use custom Pydantic model for validation
+- `format_response()`: Custom response formatting
+- `get_system_prompt()`: Override default system prompt
+- `get_model_category()`: Specify model requirements
 
 ### Registration
 1. Create system prompt in `systemprompts/`
@@ -130,8 +127,28 @@ python communication_simulator_test.py --quick
 
 ## Examples to Study
 
-- **Simple Tool**: `tools/chat.py` - Clean request/response pattern
-- **Workflow Tool**: `tools/debug.py` - Multi-step investigation with expert analysis
+- **Chat Tool** (`tools/chat.py`): Simple conversational AI with file support
+- **Consensus Tool** (`tools/consensus.py`): Advanced parallel processing with custom execute() method
 
-**Recommendation**: Start with existing tools as templates and explore the base classes to understand available hooks and methods.
+### Chat Tool Pattern
+Best for tools that:
+- Process a single prompt
+- Return AI-generated content
+- Support file context
+- Use standard request/response flow
+
+### Consensus Tool Pattern  
+Best for tools that:
+- Need custom execution logic
+- Make multiple AI calls
+- Process results before returning
+- Implement complex workflows in a single call
+
+## Best Practices
+
+1. **Keep descriptions concise**: Tool descriptions should be brief (60-80 words) to preserve context
+2. **Use execute() for complex logic**: Override execute() instead of prepare_prompt() for advanced tools
+3. **Leverage base functionality**: SimpleTool provides file handling, conversation memory, and model validation
+4. **Test with simulator**: Always add simulator tests to validate real MCP communication
+5. **Follow existing patterns**: Study the two included tools to understand implementation approaches
 

@@ -6,7 +6,7 @@
       "Custom API endpoints - Local models (Ollama, vLLM, LM Studio, etc.)",
       "Self-hosted APIs - Any OpenAI-compatible endpoint"
     ],
-    "documentation": "https://github.com/BeehiveInnovations/zen-mcp-server/blob/main/docs/custom_models.md",
+    "documentation": "https://github.com/FallDownTheSystem/zen-mcp-server/blob/main/docs/custom_models.md",
     "usage": "Models can be accessed via aliases (e.g., 'opus', 'local-llama') or full names (e.g., 'anthropic/claude-opus-4', 'llama3.2')",
     "instructions": [
       "Add new models by copying an existing entry and modifying it",

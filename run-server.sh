@@ -1518,7 +1518,7 @@ show_help() {
     echo "  $0 --clear-cache Clear Python cache (fixes import issues)"
     echo ""
     echo "For more information, visit:"
-    echo "  https://github.com/BeehiveInnovations/zen-mcp-server"
+    echo "  https://github.com/FallDownTheSystem/zen-mcp-server"
 }
 
 # Show version only
