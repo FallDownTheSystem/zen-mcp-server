@@ -102,16 +102,10 @@ Output: "Les dictionnaires Python sont des paires clé-valeur qui permettent de 
 
 ### 3. Affected Tools
 
-All MCP tools are affected by this configuration:
+Both tools in the Simplified Zen MCP server are affected by this configuration:
 
 - `chat` – General conversation
-- `codereview` – Code review
-- `analyze` – Code analysis
-- `debug` – Debugging
-- `refactor` – Refactoring
-- `thinkdeep` – Deep thinking
-- `consensus` – Model consensus
-- And all other tools...
+- `consensus` – Multi-model consensus gathering
 
 ## Best Practices
 

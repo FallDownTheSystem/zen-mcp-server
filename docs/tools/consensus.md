@@ -137,9 +137,7 @@ The consensus tool includes built-in ethical safeguards:
 - Warning messages for potentially problematic requests
 - Focus on constructive technical decision-making
 
-## When to Use Consensus vs Other Tools
+## When to Use Consensus vs Chat
 
-- **Use `consensus`** for: Multi-perspective analysis, structured debates, major technical decisions
-- **Use `chat`** for: Open-ended discussions and brainstorming
-- **Use `thinkdeep`** for: Extending specific analysis with deeper reasoning
-- **Use `analyze`** for: Understanding existing systems without debate
+- **Use `consensus`** for: Multi-perspective analysis, gathering diverse insights, major technical decisions where multiple viewpoints add value
+- **Use `chat`** for: Single-model interactions, general discussions, brainstorming, or when you need a specific model's perspective

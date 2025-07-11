@@ -76,9 +76,7 @@ and then debate with the other models to give me a final verdict
 - **Leverage visual context**: Include diagrams, mockups, or screenshots when discussing UI/UX
 - **Request web searches**: Ask for current best practices or recent developments in technologies
 
-## When to Use Chat vs Other Tools
+## When to Use Chat vs Consensus
 
-- **Use `chat`** for: Open-ended discussions, brainstorming, getting second opinions, technology comparisons
-- **Use `thinkdeep`** for: Extending specific analysis, challenging assumptions, deeper reasoning
-- **Use `analyze`** for: Understanding existing code structure and patterns
-- **Use `debug`** for: Specific error diagnosis and troubleshooting
+- **Use `chat`** for: Single-model conversations, open-ended discussions, brainstorming, getting opinions, general development questions
+- **Use `consensus`** for: Multi-model perspectives, critical decisions where diverse viewpoints add value, comparing different approaches across models

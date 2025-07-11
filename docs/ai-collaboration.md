@@ -9,7 +9,7 @@ This server enables **true AI collaboration** between Claude and multiple AI mod
 - **Claude can respond** with additional information, files, or refined instructions
 - **Claude can work independently** between exchanges - implementing solutions, gathering data, or performing analysis
 - **Claude can return to Gemini** with progress updates and new context for further collaboration
-- **Cross-tool continuation** - Start with one tool (e.g., `analyze`) and continue with another (e.g., `codereview`) using the same conversation thread
+- **Cross-tool continuation** - Start with one tool (e.g., `chat`) and continue with another (e.g., `consensus`) using the same conversation thread
 - **Both AIs coordinate their approaches** - questioning assumptions, validating solutions, and building on each other's insights
 - Each conversation maintains full context while only sending incremental updates
 - Conversations are automatically managed in memory for the session duration
@@ -60,21 +60,21 @@ This server enables **true AI collaboration** between Claude and multiple AI mod
 **Seamless Tool Switching with Context Preservation:**
 
 ```
-1. Claude: "Analyze /src/auth.py for security issues"
-   → Auto mode: Claude picks Gemini Pro for deep security analysis
-   → Pro analyzes and finds vulnerabilities, provides continuation_id
+1. Claude: "Explain the authentication flow in /src/auth.py"
+   → Auto mode: Claude picks Gemini Pro for deep analysis via chat tool
+   → Pro analyzes and explains the flow, provides continuation_id
 
-2. Claude: "Review the authentication logic thoroughly"
-   → Uses same continuation_id, but Claude picks O3 for logical analysis
-   → O3 sees previous Pro analysis and provides logic-focused review
+2. Claude: "Get consensus from multiple models on improving this auth implementation"
+   → Uses same continuation_id with consensus tool
+   → Multiple models see previous analysis and provide improvement suggestions
 
-3. Claude: "Debug the auth test failures"
-   → Same continuation_id, Claude keeps O3 for debugging
-   → O3 provides targeted debugging with full context from both previous analyses
+3. Claude: "Based on the consensus, implement the suggested improvements"
+   → Same continuation_id, back to chat tool
+   → Selected model implements changes with full context
 
-4. Claude: "Quick style check before committing"
-   → Same thread, but Claude switches to Flash for speed
-   → Flash quickly validates formatting with awareness of all previous fixes
+4. Claude: "Quick review of the changes before committing"
+   → Same thread, Claude switches to Flash for speed
+   → Flash quickly validates changes with awareness of entire conversation
 ```
 
 ## Key Benefits
@@ -92,7 +92,7 @@ This server enables **true AI collaboration** between Claude and multiple AI mod
 **Maximizing AI Collaboration:**
 - **Let Claude orchestrate**: Allow Claude to choose appropriate models for different aspects of complex tasks
 - **Use continuation**: Build on previous conversations for deeper analysis
-- **Leverage tool switching**: Move between analysis, review, and debugging tools as needed
+- **Leverage tool switching**: Move between chat and consensus tools as needed
 - **Provide clear context**: Help models understand the broader goal and constraints
 - **Trust the process**: AI-to-AI conversations can produce insights neither model would reach alone
 

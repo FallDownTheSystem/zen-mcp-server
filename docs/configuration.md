@@ -79,16 +79,16 @@ DEFAULT_MODEL=auto  # Claude picks best model for each task (recommended)
 
 ### Thinking Mode Configuration
 
-**Default Thinking Mode for ThinkDeep:**
+**Thinking Modes Configuration:**
 ```env
-# Only applies to models supporting extended thinking (e.g., Gemini 2.5 Pro)
-DEFAULT_THINKING_MODE_THINKDEEP=high
+# Thinking modes are now controlled per-request via tool parameters
+# These apply to models supporting extended thinking (e.g., Gemini 2.5 Pro)
 
 # Available modes and token consumption:
 #   minimal: 128 tokens   - Quick analysis, fastest response
 #   low:     2,048 tokens - Light reasoning tasks  
-#   medium:  8,192 tokens - Balanced reasoning
-#   high:    16,384 tokens - Complex analysis (recommended for thinkdeep)
+#   medium:  8,192 tokens - Balanced reasoning (default)
+#   high:    16,384 tokens - Complex analysis
 #   max:     32,768 tokens - Maximum reasoning depth
 ```
 
