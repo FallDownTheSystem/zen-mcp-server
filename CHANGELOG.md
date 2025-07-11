@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.0] - 2024-01-12
+
+### Added
+- **Grok-4 Support**: Added support for xAI's latest Grok-4 model (grok-4-0709)
+  - "grok" alias now defaults to grok-4 instead of grok-3
+  - Added aliases: grok4, grok-4, grok-4-latest
+  - Grok-4 supports extended thinking/reasoning capabilities
+  - Updated tests and documentation
+
 ## [2.0.0] - 2024-01-12
 
 ### Changed

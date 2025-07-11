@@ -121,7 +121,7 @@ Use the consensus tool to evaluate whether we should migrate to microservices
 
 1. **OpenAI**: GPT-4, O3 models
 2. **Google Gemini**: Gemini Pro, Gemini Flash
-3. **xAI**: Grok models
+3. **xAI**: Grok-4 (latest), Grok-3, Grok-3-fast models
 4. **OpenRouter**: Access to multiple models
 5. **Ollama**: Local model support
 6. **Custom**: Any OpenAI-compatible endpoint

@@ -320,8 +320,9 @@ class TestAutoModeProviderSelection:
                 ("pro", ProviderType.GOOGLE, "gemini-2.5-pro"),
                 ("mini", ProviderType.OPENAI, "o4-mini"),
                 ("o3mini", ProviderType.OPENAI, "o3-mini"),
-                ("grok", ProviderType.XAI, "grok-3"),
-                ("grokfast", ProviderType.XAI, "grok-3-fast"),
+                ("grok", ProviderType.XAI, "grok-4-0709"),  # Now resolves to grok-4
+                ("grok3", ProviderType.XAI, "grok-3"),  # Test grok-3 alias explicitly
+                ("grok3fast", ProviderType.XAI, "grok-3-fast"),
             ]
 
             for alias, expected_provider_type, expected_resolved_name in test_cases:
