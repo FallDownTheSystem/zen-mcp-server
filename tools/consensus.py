@@ -509,6 +509,11 @@ class ConsensusTool(WorkflowTool):
             model_name = model_config["model"]
             provider = self.get_model_provider(model_name)
 
+            # Create model context for this specific model
+            from utils.model_context import ModelContext
+
+            model_context = ModelContext(model_name)
+
             # Prepare the prompt with any relevant files
             prompt = self.initial_prompt
             if request.relevant_files:
@@ -516,6 +521,7 @@ class ConsensusTool(WorkflowTool):
                     request.relevant_files,
                     request.continuation_id,
                     "Context files",
+                    model_context=model_context,
                 )
                 if file_content:
                     prompt = f"{prompt}\n\n=== CONTEXT FILES ===\n{file_content}\n=== END CONTEXT ==="
