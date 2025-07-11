@@ -190,9 +190,9 @@ The consensus tool now operates in a single call with parallel processing:
     "next_step_required": false,
     "findings": "Initial analysis shows user demand but technical complexity",
     "models": [
-        {"model": "gemini-pro", "stance": "for"},
-        {"model": "o3", "stance": "against"},
-        {"model": "flash", "stance": "neutral"}
+        {"model": "gemini-pro"},
+        {"model": "o3"},
+        {"model": "flash"}
     ],
     "enable_cross_feedback": true,  # Optional, defaults to true
     "cross_feedback_prompt": null   # Optional custom refinement prompt
@@ -200,11 +200,49 @@ The consensus tool now operates in a single call with parallel processing:
 ```
 
 The tool will:
-1. Send your question to all models simultaneously
+1. Send your question to all models simultaneously (parallel execution)
 2. Collect initial responses from each model
-3. Share each model's response with the others
+3. Share each model's response with the others for refinement
 4. Allow models to refine their answers based on collective insights
 5. Return both initial and refined responses in a single result
+
+**Example Response Structure:**
+```json
+{
+    "status": "consensus_complete",
+    "models_consulted": 3,
+    "successful_initial_responses": 3,
+    "refined_responses": 3,
+    "phases": {
+        "initial": [
+            {
+                "model": "gemini-pro",
+                "status": "success",
+                "response": "I support this feature because...",
+                "metadata": {"input_tokens": 150, "output_tokens": 180}
+            }
+            // ... other initial responses
+        ],
+        "refined": [
+            {
+                "model": "gemini-pro",
+                "stance": "for", 
+                "status": "success",
+                "initial_response": "I support this feature because...",
+                "refined_response": "After considering other perspectives, I still support but with caveats...",
+                "metadata": {"input_tokens": 250, "output_tokens": 230}
+            }
+            // ... other refined responses
+        ]
+    }
+}
+```
+
+**Performance Notes:**
+- Parallel execution is ~3x faster than sequential for 3 models
+- Cross-feedback adds one additional round of API calls
+- Disable cross-feedback for fastest results: `"enable_cross_feedback": false`
+- Models that fail don't block others - check `failed_models` array
 
 ### Common Troubleshooting
 

@@ -9,7 +9,6 @@ Key features:
 - Parallel model consultation for faster execution
 - Two-phase approach: initial responses + refinement based on cross-model feedback
 - Context-aware file embedding
-- Support for stance-based analysis (for/against/neutral)
 - Comprehensive responses showing both initial and refined perspectives
 - Robust error handling - if one model fails, others continue
 """
@@ -61,11 +60,9 @@ CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS = {
         "provide context, or contain implementation details."
     ),
     "models": (
-        "List of model configurations to consult. Each can have a model name, stance (for/against/neutral), "
-        "and optional custom stance prompt. The same model can be used multiple times with different stances, "
-        "but each model + stance combination must be unique. "
-        "Example: [{'model': 'o3', 'stance': 'for'}, {'model': 'o3', 'stance': 'against'}, "
-        "{'model': 'flash', 'stance': 'neutral'}]"
+        "List of models to consult. Each entry should have a 'model' field with the model name. "
+        "The same model can be used multiple times to get different perspectives. "
+        "Example: [{'model': 'o3'}, {'model': 'gemini-pro'}, {'model': 'flash'}]"
     ),
     "current_model_index": (
         "Internal tracking of which model is being consulted (0-based index). Used to determine which model "
@@ -144,24 +141,10 @@ class ConsensusRequest(WorkflowRequest):
 
     @model_validator(mode="after")
     def validate_consensus_requirements(self):
-        """Ensure consensus request has required models field and unique model+stance combinations."""
+        """Ensure consensus request has required models field."""
         # For the new parallel workflow, we always need models
         if not self.models:
             raise ValueError("Consensus requires 'models' field to specify which models to consult")
-
-        # Check for unique model + stance combinations
-        seen_combinations = set()
-        for model_config in self.models:
-            model_name = model_config.get("model", "")
-            stance = model_config.get("stance", "neutral")
-            combination = f"{model_name}:{stance}"
-
-            if combination in seen_combinations:
-                raise ValueError(
-                    f"Duplicate model + stance combination found: {model_name} with stance '{stance}'. "
-                    f"Each model + stance combination must be unique."
-                )
-            seen_combinations.add(combination)
 
         return self
 
@@ -202,8 +185,7 @@ class ConsensusTool(WorkflowTool):
             "Key features:\n"
             "- Parallel execution for faster results (single tool call)\n"
             "- Cross-model feedback allows models to learn from each other\n"
-            "- Models can have stances (for/against/neutral) for structured debate\n"
-            "- Same model can be used multiple times with different stances\n"
+            "- Same model can be used multiple times for different perspectives\n"
             "- Robust error handling - if one model fails, others continue\n"
             "- Optional: disable cross-feedback for faster single-phase consensus\n\n"
             "Perfect for: complex decisions, architectural choices, feature proposals, "
@@ -211,26 +193,8 @@ class ConsensusTool(WorkflowTool):
         )
 
     def get_system_prompt(self) -> str:
-        # For the CLI agent's initial analysis, use a neutral version of the consensus prompt
-        return CONSENSUS_PROMPT.replace(
-            "{stance_prompt}",
-            """BALANCED PERSPECTIVE
-
-Provide objective analysis considering both positive and negative aspects. However, if there is overwhelming evidence
-that the proposal clearly leans toward being exceptionally good or particularly problematic, you MUST accurately
-reflect this reality. Being "balanced" means being truthful about the weight of evidence, not artificially creating
-50/50 splits when the reality is 90/10.
-
-Your analysis should:
-- Present all significant pros and cons discovered
-- Weight them according to actual impact and likelihood
-- If evidence strongly favors one conclusion, clearly state this
-- Provide proportional coverage based on the strength of arguments
-- Help the questioner see the true balance of considerations
-
-Remember: Artificial balance that misrepresents reality is not helpful. True balance means accurate representation
-of the evidence, even when it strongly points in one direction.""",
-        )
+        # Return the consensus prompt without stance placeholder
+        return CONSENSUS_PROMPT
 
     def get_default_temperature(self) -> float:
         return TEMPERATURE_ANALYTICAL
@@ -286,8 +250,6 @@ of the evidence, even when it strongly points in one direction.""",
                     "type": "object",
                     "properties": {
                         "model": {"type": "string"},
-                        "stance": {"type": "string", "enum": ["for", "against", "neutral"], "default": "neutral"},
-                        "stance_prompt": {"type": "string"},
                     },
                     "required": ["model"],
                 },
@@ -451,7 +413,6 @@ of the evidence, even when it strongly points in one direction.""",
                     failed_models.append(
                         {
                             "model": self.models_to_consult[i].get("model", "unknown"),
-                            "stance": self.models_to_consult[i].get("stance", "neutral"),
                             "error": str(response),
                             "phase": "initial",
                         }
@@ -475,9 +436,7 @@ of the evidence, even when it strongly points in one direction.""",
                         # Find the original model config for this response
                         model_config = None
                         for mc in self.models_to_consult:
-                            if mc.get("model") == response.get("model") and mc.get("stance", "neutral") == response.get(
-                                "stance", "neutral"
-                            ):
+                            if mc.get("model") == response.get("model"):
                                 model_config = mc
                                 break
 
@@ -561,10 +520,8 @@ of the evidence, even when it strongly points in one direction.""",
                 if file_content:
                     prompt = f"{prompt}\n\n=== CONTEXT FILES ===\n{file_content}\n=== END CONTEXT ==="
 
-            # Get stance-specific system prompt
-            stance = model_config.get("stance", "neutral")
-            stance_prompt = model_config.get("stance_prompt")
-            system_prompt = self._get_stance_enhanced_prompt(stance, stance_prompt)
+            # Use the consensus system prompt
+            system_prompt = self.get_system_prompt()
 
             # Call the model
             response = provider.generate_content(
@@ -578,7 +535,6 @@ of the evidence, even when it strongly points in one direction.""",
 
             return {
                 "model": model_name,
-                "stance": stance,
                 "status": "success",
                 "phase": phase,
                 "response": response.content,
@@ -594,7 +550,6 @@ of the evidence, even when it strongly points in one direction.""",
             logger.exception("Error consulting model %s in %s phase", model_config, phase)
             return {
                 "model": model_config.get("model", "unknown"),
-                "stance": model_config.get("stance", "neutral"),
                 "status": "error",
                 "phase": phase,
                 "error": str(e),
@@ -619,10 +574,8 @@ of the evidence, even when it strongly points in one direction.""",
                 initial_response, other_responses, request.cross_feedback_prompt
             )
 
-            # Get stance-specific system prompt
-            stance = model_config.get("stance", "neutral")
-            stance_prompt = model_config.get("stance_prompt")
-            system_prompt = self._get_stance_enhanced_prompt(stance, stance_prompt)
+            # Use the consensus system prompt
+            system_prompt = self.get_system_prompt()
 
             # Call the model with the feedback
             response = provider.generate_content(
@@ -636,7 +589,6 @@ of the evidence, even when it strongly points in one direction.""",
 
             return {
                 "model": model_name,
-                "stance": stance,
                 "status": "success",
                 "phase": phase,
                 "initial_response": initial_response.get("response"),
@@ -653,7 +605,6 @@ of the evidence, even when it strongly points in one direction.""",
             logger.exception("Error in refinement phase for model %s", model_config)
             return {
                 "model": model_config.get("model", "unknown"),
-                "stance": model_config.get("stance", "neutral"),
                 "status": "error",
                 "phase": phase,
                 "error": str(e),
@@ -681,7 +632,7 @@ Other AI models have also provided their perspectives on this same question. Her
 
         # Add other models' responses
         for i, other in enumerate(other_responses, 1):
-            model_info = f"{other.get('model', 'Unknown')} ({other.get('stance', 'neutral')} perspective)"
+            model_info = f"{other.get('model', 'Unknown')}"
             prompt += f"\n=== Response {i} from {model_info} ===\n"
             prompt += other.get("response", "No response available")
             prompt += "\n"
@@ -705,83 +656,6 @@ cross-model insights improve the overall analysis.
 """
 
         return prompt
-
-    def _get_stance_enhanced_prompt(self, stance: str, custom_stance_prompt: str | None = None) -> str:
-        """Get the system prompt with stance injection."""
-        base_prompt = CONSENSUS_PROMPT
-
-        if custom_stance_prompt:
-            return base_prompt.replace("{stance_prompt}", custom_stance_prompt)
-
-        stance_prompts = {
-            "for": """SUPPORTIVE PERSPECTIVE WITH INTEGRITY
-
-You are tasked with advocating FOR this proposal, but with CRITICAL GUARDRAILS:
-
-MANDATORY ETHICAL CONSTRAINTS:
-- This is NOT a debate for entertainment. You MUST act in good faith and in the best interest of the questioner
-- You MUST think deeply about whether supporting this idea is safe, sound, and passes essential requirements
-- You MUST be direct and unequivocal in saying "this is a bad idea" when it truly is
-- There must be at least ONE COMPELLING reason to be optimistic, otherwise DO NOT support it
-
-WHEN TO REFUSE SUPPORT (MUST OVERRIDE STANCE):
-- If the idea is fundamentally harmful to users, project, or stakeholders
-- If implementation would violate security, privacy, or ethical standards
-- If the proposal is technically infeasible within realistic constraints
-- If costs/risks dramatically outweigh any potential benefits
-
-YOUR SUPPORTIVE ANALYSIS SHOULD:
-- Identify genuine strengths and opportunities
-- Propose solutions to overcome legitimate challenges
-- Highlight synergies with existing systems
-- Suggest optimizations that enhance value
-- Present realistic implementation pathways
-
-Remember: Being "for" means finding the BEST possible version of the idea IF it has merit, not blindly supporting bad ideas.""",
-            "against": """CRITICAL PERSPECTIVE WITH RESPONSIBILITY
-
-You are tasked with critiquing this proposal, but with ESSENTIAL BOUNDARIES:
-
-MANDATORY FAIRNESS CONSTRAINTS:
-- You MUST NOT oppose genuinely excellent, common-sense ideas just to be contrarian
-- You MUST acknowledge when a proposal is fundamentally sound and well-conceived
-- You CANNOT give harmful advice or recommend against beneficial changes
-- If the idea is outstanding, say so clearly while offering constructive refinements
-
-WHEN TO MODERATE CRITICISM (MUST OVERRIDE STANCE):
-- If the proposal addresses critical user needs effectively
-- If it follows established best practices with good reason
-- If benefits clearly and substantially outweigh risks
-- If it's the obvious right solution to the problem
-
-YOUR CRITICAL ANALYSIS SHOULD:
-- Identify legitimate risks and failure modes
-- Point out overlooked complexities
-- Suggest more efficient alternatives
-- Highlight potential negative consequences
-- Question assumptions that may be flawed
-
-Remember: Being "against" means rigorous scrutiny to ensure quality, not undermining good ideas that deserve support.""",
-            "neutral": """BALANCED PERSPECTIVE
-
-Provide objective analysis considering both positive and negative aspects. However, if there is overwhelming evidence
-that the proposal clearly leans toward being exceptionally good or particularly problematic, you MUST accurately
-reflect this reality. Being "balanced" means being truthful about the weight of evidence, not artificially creating
-50/50 splits when the reality is 90/10.
-
-Your analysis should:
-- Present all significant pros and cons discovered
-- Weight them according to actual impact and likelihood
-- If evidence strongly favors one conclusion, clearly state this
-- Provide proportional coverage based on the strength of arguments
-- Help the questioner see the true balance of considerations
-
-Remember: Artificial balance that misrepresents reality is not helpful. True balance means accurate representation
-of the evidence, even when it strongly points in one direction.""",
-        }
-
-        stance_prompt = stance_prompts.get(stance, stance_prompts["neutral"])
-        return base_prompt.replace("{stance_prompt}", stance_prompt)
 
     def customize_workflow_response(self, response_data: dict, request) -> dict:
         """Customize response for consensus workflow."""
@@ -822,7 +696,7 @@ of the evidence, even when it strongly points in one direction.""",
             # Final step - show comprehensive consensus metadata
             models_consulted = []
             if self.models_to_consult:
-                models_consulted = [f"{m['model']}:{m.get('stance', 'neutral')}" for m in self.models_to_consult]
+                models_consulted = [m["model"] for m in self.models_to_consult]
 
             metadata.update(
                 {
@@ -841,7 +715,7 @@ of the evidence, even when it strongly points in one direction.""",
             # Intermediate steps - show consensus workflow in progress
             models_to_consult = []
             if self.models_to_consult:
-                models_to_consult = [f"{m['model']}:{m.get('stance', 'neutral')}" for m in self.models_to_consult]
+                models_to_consult = [m["model"] for m in self.models_to_consult]
 
             metadata.update(
                 {

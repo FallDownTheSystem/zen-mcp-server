@@ -90,13 +90,30 @@ Use the consensus tool to evaluate whether we should migrate to microservices
 ```
 
 **Features:**
-- Parallel model consultation for faster results
-- Two-phase approach: initial responses + cross-model refinement
-- Models see each other's responses and can update their analysis
-- Support for stance-based analysis (for/against/neutral)
-- Robust error handling - if one model fails, others continue
-- Optional: disable cross-feedback for faster single-phase consensus
-- All processing in a single tool call
+- **Parallel Execution**: All models consulted simultaneously (not sequentially)
+- **Two-Phase Workflow**: 
+  - Phase 1: Initial responses from all models in parallel
+  - Phase 2: Each model sees others' responses and can refine their answer
+- **Cross-Model Learning**: Models incorporate insights from other perspectives
+- **Robust Error Handling**: If one model fails, others continue without interruption
+- **Flexible Configuration**: 
+  - Enable/disable cross-feedback phase
+  - Custom refinement prompts
+  - Same model can be used multiple times
+- **Single Tool Call**: Everything happens in one atomic operation
+
+**Example Workflow:**
+1. You ask: "Should we implement real-time collaboration?"
+2. Multiple models respond in parallel with their perspectives
+3. Each model sees the others' responses
+4. Models refine their positions based on collective insights
+5. You receive both initial and refined responses for comparison
+
+**Benefits:**
+- **Faster Results**: Parallel execution vs sequential (3x faster for 3 models)
+- **Better Decisions**: Models learn from each other's perspectives
+- **Nuanced Analysis**: Different perspectives often converge toward consensus
+- **Comprehensive View**: See how opinions evolve with new information
 
 ## Model Configuration
 
