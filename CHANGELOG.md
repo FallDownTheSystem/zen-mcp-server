@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.1] - 2024-01-12
+
+### Changed
+- **Improved README**: Updated installation instructions to match original repository format
+  - Added comprehensive uvx installation guide for Claude Desktop and Claude Code
+  - Added proper shell command wrapper for cross-platform compatibility
+  - Improved configuration documentation with detailed environment variables
+  - Added collapsible sections for better organization
+
 ## [2.1.0] - 2024-01-12
 
 ### Added
