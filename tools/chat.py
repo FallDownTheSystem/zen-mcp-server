@@ -21,18 +21,9 @@ from .simple.base import SimpleTool
 
 # Field descriptions matching the original Chat tool exactly
 CHAT_FIELD_DESCRIPTIONS = {
-    "prompt": (
-        "You MUST provide a thorough, expressive question or share an idea with as much context as possible. "
-        "Remember: you're talking to an assistant who has deep expertise and can provide nuanced insights. Include your "
-        "current thinking, specific challenges, background context, what you've already tried, and what "
-        "kind of response would be most helpful. The more context and detail you provide, the more "
-        "valuable and targeted the response will be."
-    ),
-    "files": "Optional files for context (must be FULL absolute paths to real files / folders - DO NOT SHORTEN)",
-    "images": (
-        "Optional images for visual context. Useful for UI discussions, diagrams, visual problems, "
-        "error screens, or architectural mockups. (must be FULL absolute paths to real files / folders - DO NOT SHORTEN - OR these can be bas64 data)"
-    ),
+    "prompt": "Your question or topic with relevant context. More detail enables better responses.",
+    "files": "Optional files for context (absolute paths required)",
+    "images": "Optional images for visual context (absolute paths or base64 data)",
 }
 
 
@@ -60,14 +51,9 @@ class ChatTool(SimpleTool):
 
     def get_description(self) -> str:
         return (
-            "GENERAL CHAT & COLLABORATIVE THINKING - Use the AI model as your thinking partner! "
-            "Perfect for: bouncing ideas during your own analysis, getting second opinions on your plans, "
-            "collaborative brainstorming, validating your checklists and approaches, exploring alternatives. "
-            "Also great for: explanations, comparisons, general development questions. "
-            "Use this when you want to ask questions, brainstorm ideas, get opinions, discuss topics, "
-            "share your thinking, or need explanations about concepts and approaches. "
-            "Note: If you're not currently using a top-tier model such as Opus 4 or above, these tools can "
-            "provide enhanced capabilities."
+            "GENERAL CHAT & COLLABORATIVE THINKING - For development assistance, brainstorming, and code analysis. "
+            "Use when you need: explanations, comparisons, second opinions, approach validation, or general development questions. "
+            "Supports files, images, and conversation continuation."
         )
 
     def get_system_prompt(self) -> str:

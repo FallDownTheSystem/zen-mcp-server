@@ -37,50 +37,18 @@ logger = logging.getLogger(__name__)
 
 # Tool-specific field descriptions for consensus workflow
 CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS = {
-    "step": (
-        "Describe the proposal, question, or idea you want to gather consensus on. "
-        "Provide sufficient context and be clear about what decision or feedback you're seeking. "
-        "This will be sent to all models for their initial analysis."
-    ),
-    "step_number": (
-        "For the new parallel workflow, this should always be 1 as the entire consensus "
-        "gathering happens in a single call."
-    ),
-    "total_steps": (
-        "For the new parallel workflow, this should always be 1 as the entire consensus "
-        "gathering happens in a single call."
-    ),
-    "next_step_required": ("For the new parallel workflow, this should always be False."),
-    "findings": (
-        "Provide your initial analysis or context about the proposal. This helps frame "
-        "the discussion for the models that will be consulted."
-    ),
-    "relevant_files": (
-        "Files that are relevant to the consensus analysis. Include files that help understand the proposal, "
-        "provide context, or contain implementation details."
-    ),
-    "models": (
-        "List of models to consult. Each entry should have a 'model' field with the model name. "
-        "The same model can be used multiple times to get different perspectives. "
-        "Example: [{'model': 'o3'}, {'model': 'gemini-pro'}, {'model': 'flash'}]"
-    ),
-    "current_model_index": (
-        "Internal tracking of which model is being consulted (0-based index). Used to determine which model "
-        "to call next."
-    ),
-    "model_responses": ("Accumulated responses from models consulted so far. Internal field for tracking progress."),
-    "images": (
-        "Optional list of image paths or base64 data URLs for visual context. Useful for UI/UX discussions, "
-        "architecture diagrams, mockups, or any visual references that help inform the consensus analysis."
-    ),
-    "enable_cross_feedback": (
-        "Whether to enable the second phase where models see each other's responses and can refine their answers. "
-        "Defaults to True. Set to False for faster single-phase consensus."
-    ),
-    "cross_feedback_prompt": (
-        "Optional custom prompt for the cross-model feedback phase. If not provided, a default prompt will be used "
-        "that asks models to consider other perspectives and refine their response."
-    ),
+    "step": "The problem or proposal to gather consensus on. Include context.",
+    "step_number": "Always 1 (single-call workflow).",
+    "total_steps": "Always 1 (single-call workflow).",
+    "next_step_required": "Always False (single-call workflow).",
+    "findings": "Your initial analysis or context for the models.",
+    "relevant_files": "Optional files for additional context (absolute paths).",
+    "models": "List of models to consult. Example: [{'model': 'o3'}, {'model': 'flash'}]",
+    "current_model_index": "Internal tracking field.",
+    "model_responses": "Internal tracking field.",
+    "images": "Optional images for visual context (absolute paths or base64).",
+    "enable_cross_feedback": "Enable refinement phase where models see others' responses. Default: True.",
+    "cross_feedback_prompt": "Optional custom prompt for refinement phase.",
 }
 
 
@@ -173,23 +141,10 @@ class ConsensusTool(WorkflowTool):
 
     def get_description(self) -> str:
         return (
-            "PARALLEL CONSENSUS WITH CROSS-MODEL FEEDBACK - Multi-model consensus gathering in a single call. "
-            "This tool consults multiple AI models simultaneously and includes a feedback phase where models "
-            "can refine their responses based on others' perspectives.\n\n"
-            "How it works:\n"
-            "1. Send your proposal/question to all specified models in parallel\n"
-            "2. Collect all initial responses\n"
-            "3. Share each model's response with the others for refinement\n"
-            "4. Collect refined responses that incorporate cross-model insights\n"
-            "5. Return both initial and refined responses for comprehensive analysis\n\n"
-            "Key features:\n"
-            "- Parallel execution for faster results (single tool call)\n"
-            "- Cross-model feedback allows models to learn from each other\n"
-            "- Same model can be used multiple times for different perspectives\n"
-            "- Robust error handling - if one model fails, others continue\n"
-            "- Optional: disable cross-feedback for faster single-phase consensus\n\n"
-            "Perfect for: complex decisions, architectural choices, feature proposals, "
-            "technology evaluations, strategic planning where multiple perspectives and refinement are valuable."
+            "PARALLEL CONSENSUS WITH CROSS-MODEL FEEDBACK - Gathers perspectives from multiple AI models simultaneously. "
+            "Models provide initial responses, then optionally refine based on others' insights. "
+            "Returns both phases in a single call. Handles partial failures gracefully. "
+            "For: complex decisions, architectural choices, technical evaluations."
         )
 
     def get_system_prompt(self) -> str:
