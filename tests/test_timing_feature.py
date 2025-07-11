@@ -57,10 +57,14 @@ class TestTimingFeature:
 
         result_data = json.loads(result[0].text)
 
-        # Verify the response contains timing information
+        # Verify the response contains timing information in metadata
         assert result_data["status"] in ["success", "continuation_available"]
-        assert "test-model took" in result_data["content"]
-        assert "seconds to respond" in result_data["content"]
+        assert "metadata" in result_data
+        assert "response_time" in result_data["metadata"]
+        assert isinstance(result_data["metadata"]["response_time"], (int, float))
+        # Content should NOT contain timing info
+        assert "test-model took" not in result_data["content"]
+        assert "seconds to respond" not in result_data["content"]
 
     @pytest.mark.asyncio
     async def test_timing_info_added_to_error_response(self):
@@ -102,13 +106,17 @@ class TestTimingFeature:
 
         result_data = json.loads(result[0].text)
 
-        # Verify error response contains timing information
+        # Verify error response contains timing information in metadata
         assert result_data["status"] == "error"
-        assert "test-model took" in result_data["content"]
-        assert "seconds to respond" in result_data["content"]
+        assert "metadata" in result_data
+        assert "response_time" in result_data["metadata"]
+        assert isinstance(result_data["metadata"]["response_time"], (int, float))
+        # Content should NOT contain timing info
+        assert "test-model took" not in result_data["content"]
+        assert "seconds to respond" not in result_data["content"]
 
-    def test_format_response_preserves_timing_info(self):
-        """Test that the format_response method preserves timing information"""
+    def test_format_response_metadata_timing(self):
+        """Test that timing information is added to metadata, not content"""
 
         tool = ChatTool()
 
@@ -125,5 +133,7 @@ class TestTimingFeature:
             with patch.object(tool, "_create_continuation_offer", return_value=None):
                 result = tool._parse_response(raw_text, request, model_info)
 
-        # Verify timing was appended
-        assert "gemini-pro took 2.35 seconds to respond" in result.content
+        # Verify timing is in metadata, not content
+        assert result.content == raw_text  # Content should be unmodified
+        assert result.metadata is not None
+        assert result.metadata.get("response_time") == 2.345

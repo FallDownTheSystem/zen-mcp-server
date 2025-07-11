@@ -468,14 +468,18 @@ class SimpleTool(BaseTool):
                 finish_reason = model_response.metadata.get("finish_reason", "Unknown")
                 logger.warning(f"Response blocked or incomplete for {self.get_name()}. Finish reason: {finish_reason}")
 
-                # Include timing info in error message
+                # Create error output with timing in metadata
                 error_content = f"Response blocked or incomplete. Finish reason: {finish_reason}"
-                error_content += f"\n\n{self._current_model_name} took {response_time:.2f} seconds to respond."
 
                 tool_output = ToolOutput(
                     status="error",
                     content=error_content,
                     content_type="text",
+                    metadata={
+                        "response_time": response_time,
+                        "model_used": self._current_model_name,
+                        "provider_used": provider.get_provider_type().value,
+                    },
                 )
 
             # Return the tool output as TextContent
@@ -507,13 +511,6 @@ class SimpleTool(BaseTool):
 
         # Format the response using the hook method
         formatted_response = self.format_response(raw_text, request, model_info)
-
-        # Append timing information if available
-        if model_info and "response_time" in model_info:
-            response_time = model_info["response_time"]
-            model_name = model_info.get("model_name", "Unknown model")
-            timing_info = f"\n\n{model_name} took {response_time:.2f} seconds to respond."
-            formatted_response += timing_info
 
         # Handle conversation continuation like old base.py
         continuation_id = self.get_request_continuation_id(request)
@@ -579,6 +576,10 @@ class SimpleTool(BaseTool):
                         except AttributeError:
                             # Fallback if provider doesn't have get_provider_type method
                             metadata["provider_used"] = str(provider)
+                # Add response time to metadata
+                response_time = model_info.get("response_time")
+                if response_time is not None:
+                    metadata["response_time"] = response_time
 
             return ToolOutput(
                 status="success",
@@ -667,6 +668,10 @@ class SimpleTool(BaseTool):
                         except AttributeError:
                             # Fallback if provider doesn't have get_provider_type method
                             metadata["provider_used"] = str(provider)
+                # Add response time to metadata
+                response_time = model_info.get("response_time")
+                if response_time is not None:
+                    metadata["response_time"] = response_time
 
             return ToolOutput(
                 status="continuation_available",

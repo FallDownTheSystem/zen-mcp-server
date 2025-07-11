@@ -3,10 +3,11 @@
 ## [6.2.3] - 2025-07-11
 
 ### Added
-- **Response Timing**: Added timing information to all model responses
-  - Displays "<Model name> took X.XX seconds to respond." at end of each response
+- **Response Timing**: Added timing information to model response metadata
+  - Response time (in seconds) now included in metadata field for all responses
   - Helps identify slow models when running consensus across multiple models
-  - Implemented in SimpleTool base class, applies to both Chat and Consensus tools
+  - Implemented in SimpleTool base class for Chat tool
+  - Added directly to consensus tool for each model's response
   - Includes timing even for error responses to track failed model performance
 
 ### Changed

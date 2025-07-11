@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, model_validator
@@ -341,7 +342,8 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model
+            # Call the model with timing
+            start_time = time.time()
             response = provider.generate_content(
                 prompt=prompt,
                 model_name=model_name,
@@ -350,6 +352,8 @@ class ConsensusTool(SimpleTool):
                 thinking_mode="medium",
                 images=request.images if request.images else None,
             )
+            end_time = time.time()
+            response_time = end_time - start_time
 
             return {
                 "model": model_name,
@@ -361,6 +365,7 @@ class ConsensusTool(SimpleTool):
                     "model_name": model_name,
                     "input_tokens": response.usage.get("input_tokens", 0) if response.usage else 0,
                     "output_tokens": response.usage.get("output_tokens", 0) if response.usage else 0,
+                    "response_time": response_time,
                 },
             }
 
@@ -395,7 +400,8 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model with the feedback
+            # Call the model with the feedback and timing
+            start_time = time.time()
             response = provider.generate_content(
                 prompt=feedback_prompt,
                 model_name=model_name,
@@ -404,6 +410,8 @@ class ConsensusTool(SimpleTool):
                 thinking_mode="medium",
                 images=request.images if request.images else None,
             )
+            end_time = time.time()
+            response_time = end_time - start_time
 
             return {
                 "model": model_name,
@@ -416,6 +424,7 @@ class ConsensusTool(SimpleTool):
                     "model_name": model_name,
                     "input_tokens": response.usage.get("input_tokens", 0) if response.usage else 0,
                     "output_tokens": response.usage.get("output_tokens", 0) if response.usage else 0,
+                    "response_time": response_time,
                 },
             }
 
