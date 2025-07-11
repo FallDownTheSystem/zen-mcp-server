@@ -423,12 +423,15 @@ class SimpleTool(BaseTool):
             )
 
             # Estimate tokens for logging
+            import time
+
             from utils.token_utils import estimate_tokens
 
             estimated_tokens = estimate_tokens(prompt)
             logger.debug(f"Prompt length: {len(prompt)} characters (~{estimated_tokens:,} tokens)")
 
-            # Generate content with provider abstraction
+            # Generate content with provider abstraction - with timing
+            start_time = time.time()
             model_response = provider.generate_content(
                 prompt=prompt,
                 model_name=self._current_model_name,
@@ -437,8 +440,12 @@ class SimpleTool(BaseTool):
                 thinking_mode=thinking_mode if provider.supports_thinking_mode(self._current_model_name) else None,
                 images=images if images else None,
             )
+            end_time = time.time()
+            response_time = end_time - start_time
 
-            logger.info(f"Received response from {provider.get_provider_type().value} API for {self.get_name()}")
+            logger.info(
+                f"Received response from {provider.get_provider_type().value} API for {self.get_name()} in {response_time:.2f}s"
+            )
 
             # Process the model's response
             if model_response.content:
@@ -449,6 +456,7 @@ class SimpleTool(BaseTool):
                     "provider": provider,
                     "model_name": self._current_model_name,
                     "model_response": model_response,
+                    "response_time": response_time,  # Add timing info
                 }
 
                 # Parse response using the same logic as old base.py
@@ -459,9 +467,14 @@ class SimpleTool(BaseTool):
                 # Handle cases where the model couldn't generate a response
                 finish_reason = model_response.metadata.get("finish_reason", "Unknown")
                 logger.warning(f"Response blocked or incomplete for {self.get_name()}. Finish reason: {finish_reason}")
+
+                # Include timing info in error message
+                error_content = f"Response blocked or incomplete. Finish reason: {finish_reason}"
+                error_content += f"\n\n{self._current_model_name} took {response_time:.2f} seconds to respond."
+
                 tool_output = ToolOutput(
                     status="error",
-                    content=f"Response blocked or incomplete. Finish reason: {finish_reason}",
+                    content=error_content,
                     content_type="text",
                 )
 
@@ -494,6 +507,13 @@ class SimpleTool(BaseTool):
 
         # Format the response using the hook method
         formatted_response = self.format_response(raw_text, request, model_info)
+
+        # Append timing information if available
+        if model_info and "response_time" in model_info:
+            response_time = model_info["response_time"]
+            model_name = model_info.get("model_name", "Unknown model")
+            timing_info = f"\n\n{model_name} took {response_time:.2f} seconds to respond."
+            formatted_response += timing_info
 
         # Handle conversation continuation like old base.py
         continuation_id = self.get_request_continuation_id(request)
