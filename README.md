@@ -4,337 +4,376 @@ A streamlined MCP (Model Context Protocol) server that provides two powerful AI 
 
 ## Overview
 
-This is a simplified fork of the original Zen MCP Server, reduced to just two essential tools:
-- **Chat**: General conversational AI for brainstorming and discussions
-- **Consensus**: Multi-model consensus gathering for complex decisions
+This is a simplified fork of the original Zen MCP Server, focused on providing just two essential tools:
 
-## Features
+- **Chat**: Single-model conversational AI for brainstorming, discussions, and problem-solving
+- **Consensus**: Multi-model parallel consensus gathering with cross-model refinement
 
-- 🤖 **Multiple AI Provider Support**: OpenAI, Google Gemini, xAI, OpenRouter, Ollama, and custom endpoints
-- 💬 **Chat Tool**: Interactive development chat and collaborative thinking
-- 🤝 **Consensus Tool**: Get perspectives from multiple AI models on the same question
-- 🔄 **Cross-Tool Conversation Memory**: Maintain context across different tool calls
-- 📁 **Smart File Handling**: Automatic file reading and context management
+The server supports multiple AI providers including OpenAI, Google Gemini, xAI, OpenRouter, and local models through Ollama or other OpenAI-compatible endpoints.
 
 ## Quick Start
 
 ### Prerequisites
-
 - Python 3.10+ (3.12 recommended)
-- Git
-- **Windows users**: WSL2 is required for Claude Code CLI
-
-### Get API Keys (at least one required)
-
-**Option A: OpenRouter (Access multiple models with one API)**
-- **OpenRouter**: Visit [OpenRouter](https://openrouter.ai/) for access to multiple models through one API
-
-**Option B: Native APIs**
-- **Gemini**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey) and generate an API key
-- **OpenAI**: Visit [OpenAI Platform](https://platform.openai.com/api-keys) to get an API key for O3 model access
-- **X.AI**: Visit [X.AI Console](https://console.x.ai/) to get an API key for GROK model access
-
-**Option C: Custom API Endpoints (Local models like Ollama, vLLM)**
-- **Ollama**: Run models like Llama 3.2 locally for free inference
-- **vLLM**: Self-hosted inference server for high-throughput inference
-- **Any OpenAI-compatible API**: Custom endpoints for your own infrastructure
+- At least one API key (OpenAI, Google Gemini, xAI, or OpenRouter)
+- **Windows users**: WSL2 is required (see WSL Setup section below)
 
 ### Installation
 
-#### Option A: Quick Install with uvx
+#### Option 1: uvx (Recommended for Claude Desktop)
 
-**Prerequisites**: Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first (required for uvx)
-
-<details>
-<summary>Claude Desktop Configuration</summary>
-
-Add this to your Claude Desktop config file:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+2. Add to Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
   "mcpServers": {
     "zen": {
-      "command": "sh",
-      "args": [
-        "-c",
-        "exec $(which uvx || echo uvx) --from git+https://github.com/FallDownTheSystem/zen-mcp-server.git zen-mcp-server"
-      ],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/FallDownTheSystem/zen-mcp-server.git", "zen-mcp-server"],
       "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:~/.local/bin",
-        "OPENAI_API_KEY": "your_api_key_here",
-        "GEMINI_API_KEY": "your_gemini_key_here",
-        "XAI_API_KEY": "your_xai_key_here"
+        "GEMINI_API_KEY": "your-key-here",
+        "OPENAI_API_KEY": "your-key-here"
       }
     }
   }
 }
 ```
-</details>
 
-<details>
-<summary>Claude Code CLI Configuration</summary>
+3. Restart Claude Desktop
 
-Create a `.mcp.json` file in your project root:
-```json
-{
-  "mcpServers": {
-    "zen": {
-      "command": "sh",
-      "args": [
-        "-c",
-        "exec $(which uvx || echo uvx) --from git+https://github.com/FallDownTheSystem/zen-mcp-server.git zen-mcp-server"
-      ],
-      "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:~/.local/bin",
-        "OPENAI_API_KEY": "your_api_key_here",
-        "GEMINI_API_KEY": "your_gemini_key_here",
-        "XAI_API_KEY": "your_xai_key_here"
-      }
-    }
-  }
-}
-```
-</details>
-
-**What this does:**
-- **Zero setup required** - uvx handles everything automatically
-- **Always up-to-date** - Pulls latest version on each run
-- **No local dependencies** - Works without Python environment setup
-- **Instant availability** - Ready to use immediately
-
-#### Option B: Traditional Clone and Set Up
+#### Option 2: Traditional Setup
 
 ```bash
-# Clone to your preferred location
 git clone https://github.com/FallDownTheSystem/zen-mcp-server.git
 cd zen-mcp-server
-
-# One-command setup installs Zen in Claude
 ./run-server.sh
-
-# To view MCP configuration for Claude
-./run-server.sh -c
-
-# See help for more
-./run-server.sh --help
 ```
 
-**What this does:**
-- **Sets up everything automatically** - Python environment, dependencies, configuration
-- **Configures Claude integrations** - Adds to Claude Code CLI and guides Desktop setup
-- **Ready to use immediately** - No manual configuration needed
+### Configuration
 
-**After updates:** Always run `./run-server.sh` again after `git pull` to ensure everything stays current.
-
-### Add Your API Keys
+Create a `.env` file with at least one API key:
 
 ```bash
-# Edit .env to add your API keys (if not already set in environment)
-nano .env
+# Native APIs (recommended)
+GEMINI_API_KEY=your-key      # Google AI Studio
+OPENAI_API_KEY=your-key      # OpenAI Platform
+XAI_API_KEY=your-key         # X.AI Console
 
-# The file will contain, at least one should be set:
-# GEMINI_API_KEY=your-gemini-api-key-here  # For Gemini models
-# OPENAI_API_KEY=your-openai-api-key-here  # For O3 model
-# XAI_API_KEY=your-xai-api-key-here        # For Grok models
-# OPENROUTER_API_KEY=your-openrouter-key   # For OpenRouter
+# OR use OpenRouter for multiple models
+OPENROUTER_API_KEY=your-key
 
-# For local models (Ollama, vLLM, etc.):
-# CUSTOM_API_URL=http://localhost:11434/v1  # Ollama example
-# CUSTOM_API_KEY=                          # Empty for Ollama
-# CUSTOM_MODEL_NAME=llama3.2              # Default model
-
-# Note: At least one API key OR custom URL is required
+# OR use local models (Ollama example)
+CUSTOM_API_URL=http://localhost:11434/v1
+CUSTOM_MODEL_NAME=llama3.2
 ```
 
-**No restart needed**: The server reads the .env file each time Claude calls a tool, so changes take effect immediately.
+## Usage
 
-**Next**: Now run `claude` from your project folder using the terminal for it to connect to the newly added mcp server.
+Simply ask Claude naturally in your conversation:
 
-#### If Setting up for Claude Desktop
+- "Use chat to discuss this architecture"
+- "Get consensus from o3, flash, and pro on whether to use microservices"
+- "Chat with gemini about implementation strategies"
+- "Use zen chat to brainstorm solutions" (Claude will pick the best model)
 
-**Need the exact configuration?** Run `./run-server.sh -c` to display the platform-specific setup instructions with correct paths.
+The server integrates seamlessly with Claude's interface - just mention the tool in your request.
 
-1. **Open Claude Desktop config**: Settings → Developer → Edit Config
-2. **Copy the configuration** shown by `./run-server.sh -c` into your `claude_desktop_config.json`
-3. **Restart Claude Desktop** for changes to take effect
+## Key Features
 
-### Start Using It!
+### Conversation Memory & Context Revival
+The server maintains conversation context across tool calls with a powerful context revival system:
+- **Persistent Memory**: Conversations are stored with UUID-based threads that persist across Claude's context resets
+- **Context Revival**: When Claude's context resets, other models can access the full conversation history and "remind" Claude of everything discussed
+- **Cross-Tool Continuation**: Switch between chat and consensus tools while preserving complete context
+- **Smart Prioritization**: Newest context is prioritized when token limits are reached
+- **3-Hour Persistence**: Conversations remain in memory for 3 hours (configurable)
 
-Just ask Claude naturally:
-- "Use zen chat to discuss implementation strategies" → Claude picks best model + `chat`
-- "Get consensus from multiple models about whether we should migrate to microservices" → Multi-model analysis
-- "Chat with gemini about this architecture design" → Uses Gemini specifically
-- "Use o3 to analyze this complex algorithm" → Uses O3 specifically
+This means you can have multi-hour workflows where Claude orchestrates different models, and even after context resets, the conversation continues seamlessly.
 
-## Configuration
+### File and Image Support
+Both tools support:
+- **File Context**: Include code files, configs, or documentation for analysis
+- **Image Analysis**: Analyze diagrams, screenshots, UI mockups, or architecture visuals
+- **Directory Support**: Specify entire directories to analyze multiple files
 
-Configure the Zen MCP Server through environment variables. For uvx installation, add these to your Claude configuration. For traditional installation, use the `.env` file.
+### Auto Mode
+When you don't specify a model, Claude intelligently selects the best one based on:
+- Task complexity
+- Required capabilities (vision, reasoning, speed)
+- Context length requirements
+- Cost optimization
+
+### Localization Support
+Configure response language with the `LOCALE` environment variable:
+```bash
+LOCALE=fr-FR  # French
+LOCALE=zh-CN  # Chinese (Simplified)
+LOCALE=ja-JP  # Japanese
+# Any standard language code
+```
+
+## Tools
+
+### Chat Tool
+
+The chat tool provides single-model conversations with support for files, images, and web search. It's perfect for brainstorming, getting second opinions, exploring ideas, and general development discussions.
+
+**Parameters:**
+- `prompt` (required): Your question or topic
+- `model`: Specific model to use (defaults to auto mode where Claude picks the best model)
+- `files`: List of files to include for context
+- `images`: Images for visual analysis (diagrams, screenshots, mockups)
+- `temperature`: Response creativity from 0.0-1.0, default 0.5
+- `thinking_mode`: Control reasoning depth - minimal/low/medium/high/max (Gemini only)
+- `use_websearch`: Enable web search for current information (default: true)
+- `continuation_id`: Continue a previous conversation
+
+### Consensus Tool
+
+The consensus tool orchestrates multiple AI models to provide diverse perspectives on your questions. It uses a powerful two-phase parallel workflow:
+
+1. **Phase 1**: All models analyze your question independently and simultaneously
+2. **Phase 2**: Each model sees the other responses and can refine their answer based on new insights
+
+This approach is inspired by Grok 4's multi-agent system, where the real value comes from models spotting each other's breakthrough insights.
+
+**Parameters:**
+- `prompt` (required): The question or proposal to analyze
+- `models` (required): List of models to consult (e.g., [{"model": "o3"}, {"model": "flash"}])
+- `relevant_files`: Files for context
+- `images`: Visual references (architecture diagrams, UI mockups, etc.)
+- `enable_cross_feedback`: Allow models to see and refine based on others' responses (default: true)
+- `temperature`: Response consistency from 0.0-1.0, default 0.2 for analytical responses
+- `continuation_id`: Continue a previous consensus discussion
+
+**Key Benefits:**
+- **3x faster** than sequential execution - all models work in parallel
+- **Breakthrough discovery** - when one model finds the key insight, others can recognize and build on it
+- **Robust error handling** - if one model fails, others continue without interruption
+- **Evolution of thought** - see how perspectives change when models learn from each other
+
+## Supported Models
+
+The server supports a wide range of models from different providers:
+
+### Native APIs
+- **Google Gemini**
+  - `pro` (Gemini 2.5 Pro): 1M context, extended thinking modes, deep analysis
+  - `flash` (Gemini 2.0 Flash): 1M context, ultra-fast responses, perfect for quick tasks
+- **OpenAI**
+  - `o3`: Strong logical reasoning, 200K context
+  - `o3-mini`: Balanced speed and quality, 200K context
+  - `o4-mini`: Latest reasoning model, optimized for shorter contexts
+  - `gpt4.1`: GPT-4 with 1M context window
+- **xAI**
+  - `grok-4`: Latest GROK model with advanced reasoning
+  - `grok-3`: Previous generation, still highly capable
+  - `grok-3-fast`: Faster variant with higher performance
+
+### OpenRouter
+Use OpenRouter to access multiple models through a single API key:
+- GPT-4, Claude (Opus, Sonnet, Haiku)
+- Llama models (70B, 405B)
+- Mistral, Mixtral
+- Many other commercial and open models
+
+### Local Models
+Run models locally for privacy and cost savings:
+- **Ollama**: Easy local inference with models like Llama 3.2, Mistral
+- **vLLM**: High-performance inference server
+- **LM Studio**: User-friendly local model interface
+- Any OpenAI-compatible API endpoint
+
+## Advanced Configuration
 
 ### Environment Variables
 
-**API Keys** (at least one required):
 ```bash
-# Native APIs
-OPENAI_API_KEY=your-openai-key      # For O3, O4-mini models
-GEMINI_API_KEY=your-gemini-key      # For Gemini Pro/Flash models
-XAI_API_KEY=your-xai-key            # For Grok-4, Grok-3 models
-OPENROUTER_API_KEY=your-key         # For OpenRouter access
-
-# Custom/Local Models (e.g., Ollama)
-CUSTOM_API_URL=http://localhost:11434/v1
-CUSTOM_API_KEY=                     # Empty for Ollama
-CUSTOM_MODEL_NAME=llama3.2         # Default model
-```
-
-**Configuration Options**:
-```bash
-# Model Selection
-DEFAULT_MODEL=auto                  # auto, flash, pro, o3, grok, etc.
+# Model selection
+DEFAULT_MODEL=auto              # Let Claude choose
 
 # Logging
-LOG_LEVEL=INFO                      # DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO                  # DEBUG for troubleshooting
 
-# Conversation Settings
-CONVERSATION_TIMEOUT_HOURS=3        # How long conversations persist
-MAX_CONVERSATION_TURNS=20           # Max turns in AI-to-AI conversations
+# Conversation memory
+CONVERSATION_TIMEOUT_HOURS=3
+MAX_CONVERSATION_TURNS=20
 
-# Model Restrictions (optional)
-OPENAI_ALLOWED_MODELS=o3,o4-mini   # Comma-separated list
-GOOGLE_ALLOWED_MODELS=flash,pro     # Comma-separated list
-XAI_ALLOWED_MODELS=grok-4           # Comma-separated list
+# Model restrictions (optional)
+GOOGLE_ALLOWED_MODELS=flash,pro
+OPENAI_ALLOWED_MODELS=o3,o3-mini
 ```
 
-## Available Tools
+### Thinking Modes (Gemini only)
 
-### 1. Chat Tool
+Control the reasoning depth and token usage for Gemini models. Higher modes use more tokens but provide deeper analysis:
 
-General-purpose conversational AI for brainstorming, discussions, and problem-solving.
+| Mode | Token Budget | Use Case |
+|------|-------------|----------|
+| `minimal` | 128 tokens | Quick tasks, simple questions |
+| `low` | 2,048 tokens | Basic reasoning, straightforward problems |
+| `medium` | 8,192 tokens | Default - balanced for most tasks |
+| `high` | 16,384 tokens | Complex analysis, architecture decisions |
+| `max` | 32,768 tokens | Maximum reasoning depth for critical problems |
 
-**Usage in Claude:**
-```
-Use the chat tool to discuss implementation strategies for our new feature
-```
+### Custom Models
 
-**Features:**
-- Interactive conversations
-- File context support
-- Image analysis capabilities
-- Configurable temperature and model selection
+Configure model aliases and custom endpoints in `conf/custom_models.json`. This allows you to use simple names for complex model identifiers:
 
-### 2. Consensus Tool
-
-Parallel multi-model consensus gathering with cross-model feedback. All models are consulted simultaneously, then given a chance to refine their responses based on other models' insights.
-
-**Usage in Claude:**
-```
-Use the consensus tool to evaluate whether we should migrate to microservices
-```
-
-**Features:**
-- **Parallel Execution**: All models consulted simultaneously (not sequentially)
-- **Two-Phase Workflow**: 
-  - Phase 1: Initial responses from all models in parallel
-  - Phase 2: Each model sees others' responses and can refine their answer
-- **Cross-Model Learning**: Models incorporate insights from other perspectives
-- **Robust Error Handling**: If one model fails, others continue without interruption
-- **Flexible Configuration**: 
-  - Enable/disable cross-feedback phase
-  - Custom refinement prompts
-  - Same model can be used multiple times
-- **Single Tool Call**: Everything happens in one atomic operation
-
-**Example Workflow:**
-1. You ask: "Should we implement real-time collaboration?"
-2. Multiple models respond in parallel with their perspectives
-3. Each model sees the others' responses
-4. Models refine their positions based on collective insights
-5. You receive both initial and refined responses for comparison
-
-**Benefits:**
-- **Faster Results**: Parallel execution vs sequential (3x faster for 3 models)
-- **Better Decisions**: Models learn from each other's perspectives
-- **Nuanced Analysis**: Different perspectives often converge toward consensus
-- **Comprehensive View**: See how opinions evolve with new information
-
-## Model Configuration
-
-### Supported Providers
-
-1. **OpenAI**: GPT-4, O3 models
-2. **Google Gemini**: Gemini Pro, Gemini Flash
-3. **xAI**: Grok-4 (latest), Grok-3, Grok-3-fast models
-4. **OpenRouter**: Access to multiple models
-5. **Ollama**: Local model support
-6. **Custom**: Any OpenAI-compatible endpoint
-
-### Model Selection
-
-You can specify models in your tool calls:
-```
-Use the chat tool with model gemini-pro to explain this code
+```json
+{
+  "model_aliases": {
+    "llama": "llama3.2",
+    "mistral": "mistral-nemo",
+    "gpt4": "openai/gpt-4-turbo-preview"
+  },
+  "is_custom": true
+}
 ```
 
-Or use model aliases:
-```
-Use consensus with models flash and o3-mini to evaluate this approach
-```
+Now you can use `"llama"` instead of `"llama3.2"` in your requests.
+
+## Troubleshooting
+
+### Viewing Logs
+
+The server provides detailed logging to help diagnose issues:
+
+- **Traditional install**: 
+  ```bash
+  tail -f logs/mcp_server.log        # Main server log
+  tail -f logs/mcp_activity.log      # Tool execution log
+  ```
+- **uvx install**: Check Claude's developer console (View → Developer → Logs)
+
+### Common Issues
+
+1. **API Key Issues**
+   - Ensure your API keys are correctly set in `.env` (traditional) or Claude config (uvx)
+   - Check that keys don't have extra spaces or quotes
+   - Verify keys are active on the provider's platform
+
+2. **Model Not Found**
+   - Check that the model name matches the provider's exact naming
+   - Some models require specific API access (e.g., o3 requires OpenAI access)
+   - Use `DEFAULT_MODEL=auto` to let Claude choose available models
+
+3. **Connection Issues**
+   - Verify your network connection
+   - Check if API endpoints are accessible
+   - For local models, ensure the server is running (e.g., `ollama serve`)
+   - Firewall may block connections to local model servers
+
+4. **uvx Installation Issues**
+   - Ensure `uv` is installed and in your PATH
+   - Verify Claude Desktop config JSON is valid (no trailing commas)
+   - Restart Claude Desktop after configuration changes
 
 ## Development
 
-### Running Tests
+For contributors and developers working on the Zen MCP Server:
 
 ```bash
 # Run unit tests
 python -m pytest tests/ -v
 
-# Run integration tests
+# Run integration tests (requires API keys)
 ./run_integration_tests.sh
 
-# Run simulator tests (quick mode)
+# Run all code quality checks
+./code_quality_checks.sh
+
+# Run quick simulator tests
 python communication_simulator_test.py --quick
 ```
 
-### Code Quality
+Before submitting PRs, ensure all tests pass and code quality checks succeed.
+
+## Platform-Specific Setup
+
+### WSL Setup (Windows)
+
+Windows users must use WSL2 for the Claude Code CLI. Here's the setup process:
 
 ```bash
-# Run all quality checks
-./code_quality_checks.sh
+# Update WSL and Ubuntu
+sudo apt update && sudo apt upgrade -y
+
+# Install required dependencies
+sudo apt install -y python3-venv python3-pip curl git
+
+# Install Node.js and npm (for Claude Code CLI)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# Clone and setup (in WSL, not Windows filesystem)
+cd ~
+git clone https://github.com/FallDownTheSystem/zen-mcp-server.git
+cd zen-mcp-server
+./run-server.sh
 ```
 
-## Troubleshooting
+### Docker Deployment
 
-### Logs
+For production environments, you can deploy using Docker:
 
-For traditional installation, check server logs at:
 ```bash
-tail -f logs/mcp_server.log
-tail -f logs/mcp_activity.log
+# Clone the repository
+git clone https://github.com/FallDownTheSystem/zen-mcp-server.git
+cd zen-mcp-server
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Deploy with Docker Compose
+./docker/scripts/deploy.sh      # Linux/macOS
+.\docker\scripts\deploy.ps1     # Windows PowerShell
 ```
 
-For uvx installation with Claude Desktop, check Claude's developer console for logs.
+The Docker deployment includes:
+- Health checks and auto-restart
+- Volume persistence for logs
+- Security hardening (non-root user, read-only filesystem)
+- Resource limits and monitoring
 
-### Common Issues
+### Integration with Other MCP Clients
 
-1. **API Key Issues**: 
-   - For uvx: Ensure your API keys are correctly set in Claude Desktop config
-   - For traditional: Ensure your API keys are correctly set in `.env`
+#### Gemini CLI
+While connection works, tool invocation is not yet fully functional. To configure:
 
-2. **Model Not Found**: Check that the model name is correct for your provider
+```json
+// ~/.gemini/settings.json
+{
+  "mcpServers": {
+    "zen": {
+      "command": "/path/to/zen-mcp-server/zen-mcp-server"
+    }
+  }
+}
+```
 
-3. **Connection Issues**: Verify your network and API endpoint settings
+#### Claude Code CLI
+For project-specific configuration, create `.mcp.json` in your project root:
 
-4. **uvx Installation Issues**:
-   - Make sure `uv` is installed and in your PATH
-   - Try running `uvx --version` to verify installation
-   - Ensure Claude Desktop config JSON is valid (no trailing commas, proper quotes)
-   - Restart Claude Desktop after config changes
-
-## Contributing
-
-Contributions are welcome! Please ensure all tests pass and code quality checks succeed before submitting PRs.
+```json
+{
+  "mcpServers": {
+    "zen": {
+      "command": "python",
+      "args": ["/path/to/zen-mcp-server/server.py"],
+      "env": {
+        "GEMINI_API_KEY": "your-key",
+        "OPENAI_API_KEY": "your-key"
+      }
+    }
+  }
+}
+```
 
 ## License
 

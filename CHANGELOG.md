@@ -10,6 +10,17 @@
   - Encourages models to adopt superior solutions rather than defend positions
   - Aligned with Grok 4's multi-agent approach where agents spot each other's best insights
   - Removed consensus-building language in favor of best-solution-finding
+- **Documentation Consolidation**: Merged all documentation into a comprehensive README
+  - Incorporated WSL setup, Docker deployment, and platform-specific guides
+  - Added context revival system explanation
+  - Added localization configuration details
+  - Removed separate docs folder as all content is now in README
+  - Enhanced README with better formatting and organization
+- **Documentation Cleanup**: Removed references to deleted tools
+  - Updated advanced-usage.md, ai-collaboration.md, configuration.md
+  - Updated locale-configuration.md to reflect only chat and consensus tools
+  - Removed documentation for 14 deleted tools (analyze, debug, etc.)
+  - Fixed simulator test imports for missing test files
 
 ## [6.2.4] - 2025-07-11
 
