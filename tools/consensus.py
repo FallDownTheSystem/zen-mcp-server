@@ -1,20 +1,22 @@
 """
-Consensus tool - Step-by-step multi-model consensus with expert analysis
+Consensus tool - Parallel multi-model consensus with cross-model feedback
 
 This tool provides a structured workflow for gathering consensus from multiple models.
-It guides the CLI agent through systematic steps where the CLI agent first provides its own analysis,
-then consults each requested model one by one, and finally synthesizes all perspectives.
+It sends the initial prompt to all models in parallel, then allows each model to see
+the others' responses and refine their answer based on the collective insights.
 
 Key features:
-- Step-by-step consensus workflow with progress tracking
-- The CLI agent's initial neutral analysis followed by model-specific consultations
+- Parallel model consultation for faster execution
+- Two-phase approach: initial responses + refinement based on cross-model feedback
 - Context-aware file embedding
 - Support for stance-based analysis (for/against/neutral)
-- Final synthesis combining all perspectives
+- Comprehensive responses showing both initial and refined perspectives
+- Robust error handling - if one model fails, others continue
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -37,25 +39,22 @@ logger = logging.getLogger(__name__)
 # Tool-specific field descriptions for consensus workflow
 CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS = {
     "step": (
-        "Describe your current consensus analysis step. In step 1, provide your own neutral, balanced analysis "
-        "of the proposal/idea/plan after thinking carefully about all aspects. Consider technical feasibility, "
-        "user value, implementation complexity, and alternatives. In subsequent steps (2+), you will receive "
-        "individual model responses to synthesize. CRITICAL: Be thorough and balanced in your initial assessment, "
-        "considering both benefits and risks, opportunities and challenges."
+        "Describe the proposal, question, or idea you want to gather consensus on. "
+        "Provide sufficient context and be clear about what decision or feedback you're seeking. "
+        "This will be sent to all models for their initial analysis."
     ),
     "step_number": (
-        "The index of the current step in the consensus workflow, beginning at 1. Step 1 is your analysis, "
-        "steps 2+ are for processing individual model responses."
+        "For the new parallel workflow, this should always be 1 as the entire consensus "
+        "gathering happens in a single call."
     ),
     "total_steps": (
-        "Total number of steps needed. This equals the number of models to consult. "
-        "Step 1 includes your analysis + first model consultation on return of the call. Final step includes "
-        "last model consultation + synthesis."
+        "For the new parallel workflow, this should always be 1 as the entire consensus "
+        "gathering happens in a single call."
     ),
-    "next_step_required": ("Set to true if more models need to be consulted. False when ready for final synthesis."),
+    "next_step_required": ("For the new parallel workflow, this should always be False."),
     "findings": (
-        "In step 1, provide your comprehensive analysis of the proposal. In steps 2+, summarize the key points "
-        "from the model response received, noting agreements and disagreements with previous analyses."
+        "Provide your initial analysis or context about the proposal. This helps frame "
+        "the discussion for the models that will be consulted."
     ),
     "relevant_files": (
         "Files that are relevant to the consensus analysis. Include files that help understand the proposal, "
@@ -76,6 +75,14 @@ CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS = {
     "images": (
         "Optional list of image paths or base64 data URLs for visual context. Useful for UI/UX discussions, "
         "architecture diagrams, mockups, or any visual references that help inform the consensus analysis."
+    ),
+    "enable_cross_feedback": (
+        "Whether to enable the second phase where models see each other's responses and can refine their answers. "
+        "Defaults to True. Set to False for faster single-phase consensus."
+    ),
+    "cross_feedback_prompt": (
+        "Optional custom prompt for the cross-model feedback phase. If not provided, a default prompt will be used "
+        "that asks models to consider other perspectives and refine their response."
     ),
 }
 
@@ -113,6 +120,16 @@ class ConsensusRequest(WorkflowRequest):
     # Optional images for visual debugging
     images: list[str] | None = Field(default=None, description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["images"])
 
+    # New fields for parallel consensus with cross-feedback
+    enable_cross_feedback: bool = Field(
+        default=True,
+        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["enable_cross_feedback"],
+    )
+    cross_feedback_prompt: str | None = Field(
+        default=None,
+        description=CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+    )
+
     # Override inherited fields to exclude them from schema
     temperature: float | None = Field(default=None, exclude=True)
     thinking_mode: str | None = Field(default=None, exclude=True)
@@ -126,36 +143,39 @@ class ConsensusRequest(WorkflowRequest):
     backtrack_from_step: int | None = Field(None, exclude=True)
 
     @model_validator(mode="after")
-    def validate_step_one_requirements(self):
-        """Ensure step 1 has required models field and unique model+stance combinations."""
-        if self.step_number == 1:
-            if not self.models:
-                raise ValueError("Step 1 requires 'models' field to specify which models to consult")
+    def validate_consensus_requirements(self):
+        """Ensure consensus request has required models field and unique model+stance combinations."""
+        # For the new parallel workflow, we always need models
+        if not self.models:
+            raise ValueError("Consensus requires 'models' field to specify which models to consult")
 
-            # Check for unique model + stance combinations
-            seen_combinations = set()
-            for model_config in self.models:
-                model_name = model_config.get("model", "")
-                stance = model_config.get("stance", "neutral")
-                combination = f"{model_name}:{stance}"
+        # Check for unique model + stance combinations
+        seen_combinations = set()
+        for model_config in self.models:
+            model_name = model_config.get("model", "")
+            stance = model_config.get("stance", "neutral")
+            combination = f"{model_name}:{stance}"
 
-                if combination in seen_combinations:
-                    raise ValueError(
-                        f"Duplicate model + stance combination found: {model_name} with stance '{stance}'. "
-                        f"Each model + stance combination must be unique."
-                    )
-                seen_combinations.add(combination)
+            if combination in seen_combinations:
+                raise ValueError(
+                    f"Duplicate model + stance combination found: {model_name} with stance '{stance}'. "
+                    f"Each model + stance combination must be unique."
+                )
+            seen_combinations.add(combination)
 
         return self
 
 
 class ConsensusTool(WorkflowTool):
     """
-    Consensus workflow tool for step-by-step multi-model consensus gathering.
+    Parallel consensus tool with cross-model feedback.
 
-    This tool implements a structured consensus workflow where the CLI agent first provides
-    its own neutral analysis, then consults each specified model individually,
-    and finally synthesizes all perspectives into a unified recommendation.
+    This tool implements a two-phase consensus workflow:
+    1. Initial Phase: Consults all specified models in parallel with the same prompt
+    2. Refinement Phase: Each model sees others' responses and can refine their answer
+
+    All processing happens in a single tool call, returning both initial and refined responses.
+    Robust error handling ensures that if one model fails, others continue processing.
     """
 
     def __init__(self):
@@ -170,22 +190,24 @@ class ConsensusTool(WorkflowTool):
 
     def get_description(self) -> str:
         return (
-            "COMPREHENSIVE CONSENSUS WORKFLOW - Step-by-step multi-model consensus with structured analysis. "
-            "This tool guides you through a systematic process where you:\n\n"
-            "1. Start with step 1: provide your own neutral analysis of the proposal\n"
-            "2. The tool will then consult each specified model one by one\n"
-            "3. You'll receive each model's response in subsequent steps\n"
-            "4. Track and synthesize perspectives as they accumulate\n"
-            "5. Final step: present comprehensive consensus and recommendations\n\n"
-            "IMPORTANT: This workflow enforces sequential model consultation:\n"
-            "- Step 1 is always your independent analysis\n"
-            "- Each subsequent step processes one model response\n"
-            "- Total steps = number of models (each step includes consultation + response)\n"
+            "PARALLEL CONSENSUS WITH CROSS-MODEL FEEDBACK - Multi-model consensus gathering in a single call. "
+            "This tool consults multiple AI models simultaneously and includes a feedback phase where models "
+            "can refine their responses based on others' perspectives.\n\n"
+            "How it works:\n"
+            "1. Send your proposal/question to all specified models in parallel\n"
+            "2. Collect all initial responses\n"
+            "3. Share each model's response with the others for refinement\n"
+            "4. Collect refined responses that incorporate cross-model insights\n"
+            "5. Return both initial and refined responses for comprehensive analysis\n\n"
+            "Key features:\n"
+            "- Parallel execution for faster results (single tool call)\n"
+            "- Cross-model feedback allows models to learn from each other\n"
             "- Models can have stances (for/against/neutral) for structured debate\n"
             "- Same model can be used multiple times with different stances\n"
-            "- Each model + stance combination must be unique\n\n"
+            "- Robust error handling - if one model fails, others continue\n"
+            "- Optional: disable cross-feedback for faster single-phase consensus\n\n"
             "Perfect for: complex decisions, architectural choices, feature proposals, "
-            "technology evaluations, strategic planning."
+            "technology evaluations, strategic planning where multiple perspectives and refinement are valuable."
         )
 
     def get_system_prompt(self) -> str:
@@ -286,6 +308,15 @@ of the evidence, even when it strongly points in one direction.""",
                 "items": {"type": "string"},
                 "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["images"],
             },
+            "enable_cross_feedback": {
+                "type": "boolean",
+                "default": True,
+                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["enable_cross_feedback"],
+            },
+            "cross_feedback_prompt": {
+                "type": "string",
+                "description": CONSENSUS_WORKFLOW_FIELD_DESCRIPTIONS["cross_feedback_prompt"],
+            },
         }
 
         # Define excluded fields for consensus workflow
@@ -320,31 +351,16 @@ of the evidence, even when it strongly points in one direction.""",
     def get_required_actions(
         self, step_number: int, confidence: str, findings: str, total_steps: int
     ) -> list[str]:  # noqa: ARG002
-        """Define required actions for each consensus phase.
+        """Define required actions for consensus workflow.
 
-        Note: confidence parameter is kept for compatibility with base class but not used.
+        For the new parallel workflow, this is simplified since everything happens in one call.
         """
-        if step_number == 1:
-            # CLI Agent's initial analysis
-            return [
-                "You've provided your initial analysis. The tool will now consult other models.",
-                "Wait for the next step to receive the first model's response.",
-            ]
-        elif step_number < total_steps - 1:
-            # Processing individual model responses
-            return [
-                "Review the model response provided in this step",
-                "Note key agreements and disagreements with previous analyses",
-                "Wait for the next model's response",
-            ]
-        else:
-            # Ready for final synthesis
-            return [
-                "All models have been consulted",
-                "Synthesize all perspectives into a comprehensive recommendation",
-                "Identify key points of agreement and disagreement",
-                "Provide clear, actionable guidance based on the consensus",
-            ]
+        return [
+            "Consensus gathering will consult all specified models in parallel",
+            "Models will receive the same prompt and provide initial responses",
+            "If cross-feedback is enabled, models will see each other's responses and refine their answers",
+            "You will receive all responses (initial and refined) in a single result",
+        ]
 
     def should_call_expert_analysis(self, consolidated_findings, request=None) -> bool:
         """Consensus workflow doesn't use traditional expert analysis - it consults models step by step."""
@@ -388,148 +404,146 @@ of the evidence, even when it strongly points in one direction.""",
         return step_data
 
     async def handle_work_completion(self, response_data: dict, request, arguments: dict) -> dict:  # noqa: ARG002
-        """Handle consensus workflow completion - no expert analysis, just final synthesis."""
-        response_data["consensus_complete"] = True
-        response_data["status"] = "consensus_workflow_complete"
+        """Handle consensus workflow completion.
 
-        # Prepare final synthesis data
-        response_data["complete_consensus"] = {
-            "initial_prompt": self.initial_prompt,
-            "models_consulted": [m["model"] + ":" + m.get("stance", "neutral") for m in self.accumulated_responses],
-            "total_responses": len(self.accumulated_responses),
-            "consensus_confidence": "high",  # Consensus complete
-        }
-
-        response_data["next_steps"] = (
-            "CONSENSUS GATHERING IS COMPLETE. You MUST now synthesize all perspectives and present:\n"
-            "1. Key points of AGREEMENT across models\n"
-            "2. Key points of DISAGREEMENT and why they differ\n"
-            "3. Your final consolidated recommendation\n"
-            "4. Specific, actionable next steps for implementation\n"
-            "5. Critical risks or concerns that must be addressed"
-        )
-
+        For the new parallel workflow, this is not used since everything happens in execute_workflow.
+        """
+        # This method is not used in the new parallel workflow
         return response_data
 
     def handle_work_continuation(self, response_data: dict, request) -> dict:
-        """Handle continuation between consensus steps."""
-        current_idx = request.current_model_index or 0
+        """Handle continuation between consensus steps.
 
-        if request.step_number == 1:
-            # After CLI Agent's initial analysis, prepare to consult first model
-            response_data["status"] = "consulting_models"
-            response_data["next_model"] = self.models_to_consult[0] if self.models_to_consult else None
-            response_data["next_steps"] = (
-                "Your initial analysis is complete. The tool will now consult the specified models."
-            )
-        elif current_idx < len(self.models_to_consult):
-            next_model = self.models_to_consult[current_idx]
-            response_data["status"] = "consulting_next_model"
-            response_data["next_model"] = next_model
-            response_data["models_remaining"] = len(self.models_to_consult) - current_idx
-            response_data["next_steps"] = f"Model consultation in progress. Next: {next_model['model']}"
-        else:
-            response_data["status"] = "ready_for_synthesis"
-            response_data["next_steps"] = "All models consulted. Ready for final synthesis."
-
+        For the new parallel workflow, this is not used since everything happens in one call.
+        """
+        # This method is not used in the new parallel workflow
         return response_data
 
     async def execute_workflow(self, arguments: dict[str, Any]) -> list:
-        """Override execute_workflow to handle model consultations between steps."""
-
-        # Store arguments
-        self._current_arguments = arguments
+        """Execute parallel consensus workflow with optional cross-model feedback."""
 
         # Validate request
         request = self.get_workflow_request_model()(**arguments)
 
-        # On first step, store the models to consult
-        if request.step_number == 1:
-            self.initial_prompt = request.step
-            self.models_to_consult = request.models or []
-            self.accumulated_responses = []
-            # Set total steps: len(models) (each step includes consultation + response)
-            request.total_steps = len(self.models_to_consult)
+        # Store initial state
+        self.initial_prompt = request.step
+        self.models_to_consult = request.models or []
 
-        # For all steps (1 through total_steps), consult the corresponding model
-        if request.step_number <= request.total_steps:
-            # Calculate which model to consult for this step
-            model_idx = request.step_number - 1  # 0-based index
+        try:
+            # Phase 1: Parallel initial model consultations
+            logger.info(f"Starting parallel consensus for {len(self.models_to_consult)} models")
 
-            if model_idx < len(self.models_to_consult):
-                # Consult the model for this step
-                model_response = await self._consult_model(self.models_to_consult[model_idx], request)
+            initial_tasks = [
+                self._consult_model(model_config, request, phase="initial") for model_config in self.models_to_consult
+            ]
 
-                # Add to accumulated responses
-                self.accumulated_responses.append(model_response)
+            # Execute all initial consultations in parallel
+            # return_exceptions=True ensures failures don't stop other models
+            initial_responses = await asyncio.gather(*initial_tasks, return_exceptions=True)
 
-                # Include the model response in the step data
-                response_data = {
-                    "status": "model_consulted",
-                    "step_number": request.step_number,
-                    "total_steps": request.total_steps,
-                    "model_consulted": model_response["model"],
-                    "model_stance": model_response.get("stance", "neutral"),
-                    "model_response": model_response,
-                    "current_model_index": model_idx + 1,
-                    "next_step_required": request.step_number < request.total_steps,
-                }
+            # Process results and handle any errors
+            successful_initial = []
+            failed_models = []
 
-                # Add CLAI Agent's analysis to step 1
-                if request.step_number == 1:
-                    response_data["agent_analysis"] = {
-                        "initial_analysis": request.step,
-                        "findings": request.findings,
-                    }
-                    response_data["status"] = "analysis_and_first_model_consulted"
-
-                # Check if this is the final step
-                if request.step_number == request.total_steps:
-                    response_data["status"] = "consensus_workflow_complete"
-                    response_data["consensus_complete"] = True
-                    response_data["complete_consensus"] = {
-                        "initial_prompt": self.initial_prompt,
-                        "models_consulted": [
-                            f"{m['model']}:{m.get('stance', 'neutral')}" for m in self.accumulated_responses
-                        ],
-                        "total_responses": len(self.accumulated_responses),
-                        "consensus_confidence": "high",
-                    }
-                    response_data["next_steps"] = (
-                        "CONSENSUS GATHERING IS COMPLETE. Synthesize all perspectives and present:\n"
-                        "1. Key points of AGREEMENT across models\n"
-                        "2. Key points of DISAGREEMENT and why they differ\n"
-                        "3. Your final consolidated recommendation\n"
-                        "4. Specific, actionable next steps for implementation\n"
-                        "5. Critical risks or concerns that must be addressed"
+            for i, response in enumerate(initial_responses):
+                if isinstance(response, Exception):
+                    logger.error(f"Model {self.models_to_consult[i].get('model', 'unknown')} failed: {response}")
+                    failed_models.append(
+                        {
+                            "model": self.models_to_consult[i].get("model", "unknown"),
+                            "stance": self.models_to_consult[i].get("stance", "neutral"),
+                            "error": str(response),
+                            "phase": "initial",
+                        }
                     )
                 else:
-                    response_data["next_steps"] = (
-                        f"Model {model_response['model']} has provided its {model_response.get('stance', 'neutral')} "
-                        f"perspective. Please analyze this response and call {self.get_name()} again with:\n"
-                        f"- step_number: {request.step_number + 1}\n"
-                        f"- findings: Summarize key points from this model's response"
+                    successful_initial.append(response)
+
+            # Phase 2: Cross-model feedback (if enabled and we have multiple successful responses)
+            refined_responses = []
+            if request.enable_cross_feedback and len(successful_initial) > 1:
+                logger.info(f"Starting cross-model feedback phase for {len(successful_initial)} models")
+
+                refinement_tasks = []
+                for i, response in enumerate(successful_initial):
+                    if response.get("status") == "success":
+                        # Get other models' responses (excluding this model's own response)
+                        other_responses = [
+                            r for j, r in enumerate(successful_initial) if j != i and r.get("status") == "success"
+                        ]
+
+                        # Find the original model config for this response
+                        model_config = None
+                        for mc in self.models_to_consult:
+                            if mc.get("model") == response.get("model") and mc.get("stance", "neutral") == response.get(
+                                "stance", "neutral"
+                            ):
+                                model_config = mc
+                                break
+
+                        if model_config and other_responses:
+                            refinement_tasks.append(
+                                self._consult_model_with_feedback(
+                                    model_config, request, response, other_responses, phase="refinement"
+                                )
+                            )
+
+                # Execute refinement tasks in parallel
+                if refinement_tasks:
+                    refinement_results = await asyncio.gather(*refinement_tasks, return_exceptions=True)
+
+                    for result in refinement_results:
+                        if isinstance(result, Exception):
+                            logger.error(f"Refinement phase error: {result}")
+                            # Continue without this refinement
+                        else:
+                            refined_responses.append(result)
+
+            # Prepare comprehensive response
+            response_data = {
+                "status": "consensus_complete",
+                "consensus_complete": True,
+                "initial_prompt": self.initial_prompt,
+                "models_consulted": len(self.models_to_consult),
+                "successful_initial_responses": len(successful_initial),
+                "refined_responses": len(refined_responses),
+                "failed_models": failed_models,
+                "cross_feedback_enabled": request.enable_cross_feedback,
+                "phases": {"initial": successful_initial, "refined": refined_responses if refined_responses else None},
+                "next_steps": (
+                    "PARALLEL CONSENSUS GATHERING IS COMPLETE. Please synthesize the responses:\n"
+                    "1. Review initial responses from all models\n"
+                    + (
+                        "2. Consider refined responses that incorporate cross-model insights\n"
+                        if refined_responses
+                        else ""
                     )
-
-                # Add accumulated responses for tracking
-                response_data["accumulated_responses"] = self.accumulated_responses
-
-                # Add metadata (since we're bypassing the base class metadata addition)
-                model_name = self.get_request_model_name(request)
-                provider = self.get_model_provider(model_name)
-                response_data["metadata"] = {
+                    + "3. Identify key points of AGREEMENT across models\n"
+                    "4. Note key points of DISAGREEMENT and underlying reasons\n"
+                    "5. Provide your final recommendation based on the collective insights\n"
+                    "6. Suggest specific, actionable next steps"
+                ),
+                "metadata": {
                     "tool_name": self.get_name(),
-                    "model_name": model_name,
-                    "model_used": model_name,
-                    "provider_used": provider.get_provider_type().value,
-                }
+                    "workflow_type": "parallel_consensus_with_feedback" if refined_responses else "parallel_consensus",
+                    "total_models": len(self.models_to_consult),
+                    "successful_models": len(successful_initial),
+                    "models_with_refinements": len(refined_responses),
+                },
+            }
 
-                return [TextContent(type="text", text=json.dumps(response_data, indent=2, ensure_ascii=False))]
+            return [TextContent(type="text", text=json.dumps(response_data, indent=2, ensure_ascii=False))]
 
-        # Otherwise, use standard workflow execution
-        return await super().execute_workflow(arguments)
+        except Exception as e:
+            logger.exception("Error in consensus workflow execution")
+            error_response = {
+                "status": "error",
+                "error": str(e),
+                "metadata": {"tool_name": self.get_name(), "workflow_type": "parallel_consensus"},
+            }
+            return [TextContent(type="text", text=json.dumps(error_response, indent=2, ensure_ascii=False))]
 
-    async def _consult_model(self, model_config: dict, request) -> dict:
+    async def _consult_model(self, model_config: dict, request, phase: str = "initial") -> dict:
         """Consult a single model and return its response."""
         try:
             # Get the provider for this model
@@ -566,21 +580,131 @@ of the evidence, even when it strongly points in one direction.""",
                 "model": model_name,
                 "stance": stance,
                 "status": "success",
-                "verdict": response.content,
+                "phase": phase,
+                "response": response.content,
                 "metadata": {
                     "provider": provider.get_provider_type().value,
                     "model_name": model_name,
+                    "input_tokens": response.usage.get("input_tokens", 0) if response.usage else 0,
+                    "output_tokens": response.usage.get("output_tokens", 0) if response.usage else 0,
                 },
             }
 
         except Exception as e:
-            logger.exception("Error consulting model %s", model_config)
+            logger.exception("Error consulting model %s in %s phase", model_config, phase)
             return {
                 "model": model_config.get("model", "unknown"),
                 "stance": model_config.get("stance", "neutral"),
                 "status": "error",
+                "phase": phase,
                 "error": str(e),
             }
+
+    async def _consult_model_with_feedback(
+        self,
+        model_config: dict,
+        request,
+        initial_response: dict,
+        other_responses: list[dict],
+        phase: str = "refinement",
+    ) -> dict:
+        """Consult a model with feedback from other models' responses."""
+        try:
+            # Get the provider for this model
+            model_name = model_config["model"]
+            provider = self.get_model_provider(model_name)
+
+            # Build the feedback prompt
+            feedback_prompt = self._build_cross_feedback_prompt(
+                initial_response, other_responses, request.cross_feedback_prompt
+            )
+
+            # Get stance-specific system prompt
+            stance = model_config.get("stance", "neutral")
+            stance_prompt = model_config.get("stance_prompt")
+            system_prompt = self._get_stance_enhanced_prompt(stance, stance_prompt)
+
+            # Call the model with the feedback
+            response = provider.generate_content(
+                prompt=feedback_prompt,
+                model_name=model_name,
+                system_prompt=system_prompt,
+                temperature=0.2,  # Low temperature for consistency
+                thinking_mode="medium",
+                images=request.images if request.images else None,
+            )
+
+            return {
+                "model": model_name,
+                "stance": stance,
+                "status": "success",
+                "phase": phase,
+                "initial_response": initial_response.get("response"),
+                "refined_response": response.content,
+                "metadata": {
+                    "provider": provider.get_provider_type().value,
+                    "model_name": model_name,
+                    "input_tokens": response.usage.get("input_tokens", 0) if response.usage else 0,
+                    "output_tokens": response.usage.get("output_tokens", 0) if response.usage else 0,
+                },
+            }
+
+        except Exception as e:
+            logger.exception("Error in refinement phase for model %s", model_config)
+            return {
+                "model": model_config.get("model", "unknown"),
+                "stance": model_config.get("stance", "neutral"),
+                "status": "error",
+                "phase": phase,
+                "error": str(e),
+            }
+
+    def _build_cross_feedback_prompt(
+        self, initial_response: dict, other_responses: list[dict], custom_prompt: str | None = None
+    ) -> str:
+        """Build the prompt for cross-model feedback phase."""
+        if custom_prompt:
+            # Use custom prompt template
+            prompt = custom_prompt
+        else:
+            # Default cross-feedback prompt
+            prompt = f"""You previously analyzed the following question/proposal:
+
+{self.initial_prompt}
+
+Your initial response was:
+{initial_response.get('response', 'No response available')}
+
+Other AI models have also provided their perspectives on this same question. Here are their responses:
+
+"""
+
+        # Add other models' responses
+        for i, other in enumerate(other_responses, 1):
+            model_info = f"{other.get('model', 'Unknown')} ({other.get('stance', 'neutral')} perspective)"
+            prompt += f"\n=== Response {i} from {model_info} ===\n"
+            prompt += other.get("response", "No response available")
+            prompt += "\n"
+
+        # Add refinement instructions
+        if not custom_prompt:
+            prompt += """
+=== REFINEMENT REQUEST ===
+
+After reviewing these other perspectives, please provide a refined response that:
+
+1. Acknowledges valuable insights from other models that enhance your analysis
+2. Clarifies or defends your position where you disagree with others
+3. Identifies any consensus points across all models
+4. Highlights critical disagreements and their implications
+5. Updates your recommendation if the collective insights warrant it
+
+Be specific about which insights from other models influenced your thinking and why.
+Your refined response should be comprehensive but concise, focusing on how the
+cross-model insights improve the overall analysis.
+"""
+
+        return prompt
 
     def _get_stance_enhanced_prompt(self, stance: str, custom_stance_prompt: str | None = None) -> str:
         """Get the system prompt with stance injection."""

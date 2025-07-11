@@ -168,10 +168,43 @@ This simplified version includes only two tools:
    - Uses SimpleTool architecture
 
 2. **Consensus Tool** (`consensus`)
-   - Multi-model consensus gathering
-   - Sequential model consultation
+   - Parallel multi-model consensus gathering
+   - Two-phase workflow: initial responses + cross-model refinement
+   - All models consulted simultaneously for speed
+   - Models can see each other's responses and refine their answers
    - Stance-based analysis (for/against/neutral)
-   - Uses WorkflowTool architecture
+   - Single tool call (no more multi-step workflow)
+   - Robust error handling - partial failures don't stop other models
+   - Optional: disable cross-feedback for faster single-phase consensus
+
+### Using the New Consensus Tool
+
+The consensus tool now operates in a single call with parallel processing:
+
+```python
+# Example request structure:
+{
+    "step": "Should we implement real-time collaboration features?",
+    "step_number": 1,
+    "total_steps": 1,
+    "next_step_required": false,
+    "findings": "Initial analysis shows user demand but technical complexity",
+    "models": [
+        {"model": "gemini-pro", "stance": "for"},
+        {"model": "o3", "stance": "against"},
+        {"model": "flash", "stance": "neutral"}
+    ],
+    "enable_cross_feedback": true,  # Optional, defaults to true
+    "cross_feedback_prompt": null   # Optional custom refinement prompt
+}
+```
+
+The tool will:
+1. Send your question to all models simultaneously
+2. Collect initial responses from each model
+3. Share each model's response with the others
+4. Allow models to refine their answers based on collective insights
+5. Return both initial and refined responses in a single result
 
 ### Common Troubleshooting
 

@@ -51,7 +51,7 @@ class TestModelResolutionBug:
         # Mock response for successful generation
         mock_response = Mock()
         mock_response.content = "Test response"
-        mock_response.usage = None
+        mock_response.usage = {"input_tokens": 10, "output_tokens": 20}
         mock_provider.generate_content.return_value = mock_response
 
         # Track the model name passed to generate_content

@@ -6,6 +6,11 @@
 - Simplified codebase to include only two essential tools: Chat and Consensus
 - Updated documentation to reflect the streamlined architecture
 - Reduced test suite to focus on the remaining tools
+- **Major Enhancement**: Consensus tool now uses parallel processing with cross-model feedback
+  - All models are consulted simultaneously (much faster)
+  - Models can see each other's responses and refine their answers
+  - Single tool call instead of multi-step workflow
+  - Robust error handling ensures partial failures don't stop other models
 
 ### Removed
 - Removed analyze tool

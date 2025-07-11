@@ -82,7 +82,7 @@ Use the chat tool to discuss implementation strategies for our new feature
 
 ### 2. Consensus Tool
 
-Multi-model consensus gathering that consults different AI models and synthesizes their perspectives.
+Parallel multi-model consensus gathering with cross-model feedback. All models are consulted simultaneously, then given a chance to refine their responses based on other models' insights.
 
 **Usage in Claude:**
 ```
@@ -90,10 +90,13 @@ Use the consensus tool to evaluate whether we should migrate to microservices
 ```
 
 **Features:**
-- Sequential model consultation
+- Parallel model consultation for faster results
+- Two-phase approach: initial responses + cross-model refinement
+- Models see each other's responses and can update their analysis
 - Support for stance-based analysis (for/against/neutral)
-- Comprehensive synthesis of different perspectives
-- Ideal for architectural decisions and complex choices
+- Robust error handling - if one model fails, others continue
+- Optional: disable cross-feedback for faster single-phase consensus
+- All processing in a single tool call
 
 ## Model Configuration
 

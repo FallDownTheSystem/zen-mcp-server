@@ -18,58 +18,59 @@ class TestConsensusTool:
         tool = ConsensusTool()
 
         assert tool.get_name() == "consensus"
-        assert "COMPREHENSIVE CONSENSUS WORKFLOW" in tool.get_description()
+        assert "PARALLEL CONSENSUS WITH CROSS-MODEL FEEDBACK" in tool.get_description()
         assert tool.get_default_temperature() == 0.2  # TEMPERATURE_ANALYTICAL
         assert tool.get_model_category() == ToolModelCategory.EXTENDED_REASONING
         assert tool.requires_model() is False  # Consensus manages its own models
 
-    def test_request_validation_step1(self):
-        """Test Pydantic request model validation for step 1."""
-        # Valid step 1 request with models
-        step1_request = ConsensusRequest(
+    def test_request_validation(self):
+        """Test Pydantic request model validation for parallel consensus."""
+        # Valid consensus request
+        request = ConsensusRequest(
             step="Analyzing the real-time collaboration proposal",
             step_number=1,
-            total_steps=4,  # 1 (Claude) + 2 models + 1 (synthesis)
-            next_step_required=True,
+            total_steps=1,  # Single-call execution
+            next_step_required=False,
             findings="Initial assessment shows strong value but technical complexity",
             confidence="medium",
             models=[{"model": "flash", "stance": "neutral"}, {"model": "o3-mini", "stance": "for"}],
             relevant_files=["/proposal.md"],
+            enable_cross_feedback=True,
         )
 
-        assert step1_request.step_number == 1
-        assert step1_request.confidence == "medium"
-        assert len(step1_request.models) == 2
-        assert step1_request.models[0]["model"] == "flash"
+        assert request.step_number == 1
+        assert request.total_steps == 1
+        assert request.next_step_required is False
+        assert len(request.models) == 2
+        assert request.models[0]["model"] == "flash"
+        assert request.enable_cross_feedback is True
 
-    def test_request_validation_missing_models_step1(self):
-        """Test that step 1 requires models field."""
-        with pytest.raises(ValueError, match="Step 1 requires 'models' field"):
+    def test_request_validation_missing_models(self):
+        """Test that consensus requires models field."""
+        with pytest.raises(ValueError, match="Consensus requires 'models' field"):
             ConsensusRequest(
                 step="Test step",
                 step_number=1,
-                total_steps=3,
-                next_step_required=True,
+                total_steps=1,
+                next_step_required=False,
                 findings="Test findings",
                 # Missing models field
             )
 
-    def test_request_validation_later_steps(self):
-        """Test request validation for steps 2+."""
-        # Step 2+ doesn't require models field
-        step2_request = ConsensusRequest(
-            step="Processing first model response",
-            step_number=2,
-            total_steps=4,
-            next_step_required=True,
-            findings="Model provided supportive perspective",
-            confidence="medium",
-            continuation_id="test-id",
-            current_model_index=1,
+    def test_cross_feedback_disabled(self):
+        """Test request with cross-feedback disabled."""
+        request = ConsensusRequest(
+            step="Quick consensus without refinement",
+            step_number=1,
+            total_steps=1,
+            next_step_required=False,
+            findings="Need fast consensus",
+            models=[{"model": "flash"}, {"model": "o3-mini"}],
+            enable_cross_feedback=False,  # Disable refinement phase
         )
 
-        assert step2_request.step_number == 2
-        assert step2_request.models is None  # Not required after step 1
+        assert request.enable_cross_feedback is False
+        assert request.cross_feedback_prompt is None
 
     def test_request_validation_duplicate_model_stance(self):
         """Test that duplicate model+stance combinations are rejected."""
@@ -78,7 +79,7 @@ class TestConsensusTool:
             step="Analyze this proposal",
             step_number=1,
             total_steps=1,
-            next_step_required=True,
+            next_step_required=False,
             findings="Initial analysis",
             models=[
                 {"model": "o3", "stance": "for"},
@@ -95,7 +96,7 @@ class TestConsensusTool:
                 step="Analyze this proposal",
                 step_number=1,
                 total_steps=1,
-                next_step_required=True,
+                next_step_required=False,
                 findings="Initial analysis",
                 models=[
                     {"model": "o3", "stance": "for"},
@@ -104,6 +105,26 @@ class TestConsensusTool:
                 ],
                 continuation_id="test-id",
             )
+
+    def test_custom_cross_feedback_prompt(self):
+        """Test request with custom cross-feedback prompt."""
+        custom_prompt = (
+            "Based on the other models' insights, please revise your response focusing on technical feasibility."
+        )
+
+        request = ConsensusRequest(
+            step="Evaluate technical architecture",
+            step_number=1,
+            total_steps=1,
+            next_step_required=False,
+            findings="Need consensus on architecture",
+            models=[{"model": "gemini-pro"}, {"model": "o3"}],
+            enable_cross_feedback=True,
+            cross_feedback_prompt=custom_prompt,
+        )
+
+        assert request.enable_cross_feedback is True
+        assert request.cross_feedback_prompt == custom_prompt
 
     def test_input_schema_generation(self):
         """Test that input schema is generated correctly."""
@@ -138,6 +159,14 @@ class TestConsensusTool:
         assert schema["properties"]["images"]["type"] == "array"
         assert schema["properties"]["images"]["items"]["type"] == "string"
 
+        # New cross-feedback fields should be present
+        assert "enable_cross_feedback" in schema["properties"]
+        assert schema["properties"]["enable_cross_feedback"]["type"] == "boolean"
+        assert schema["properties"]["enable_cross_feedback"]["default"] is True
+
+        assert "cross_feedback_prompt" in schema["properties"]
+        assert schema["properties"]["cross_feedback_prompt"]["type"] == "string"
+
         # Verify field types
         assert schema["properties"]["step"]["type"] == "string"
         assert schema["properties"]["step_number"]["type"] == "integer"
@@ -151,22 +180,19 @@ class TestConsensusTool:
         assert "stance_prompt" in models_items["properties"]
 
     def test_get_required_actions(self):
-        """Test required actions for different consensus phases."""
+        """Test required actions for parallel consensus workflow."""
         tool = ConsensusTool()
 
-        # Step 1: Claude's initial analysis
-        actions = tool.get_required_actions(1, "exploring", "Initial findings", 4)
-        assert any("initial analysis" in action for action in actions)
-        assert any("consult other models" in action for action in actions)
+        # For the new parallel workflow, get_required_actions always returns the same list
+        # regardless of step number since everything happens in one call
+        actions = tool.get_required_actions(1, "exploring", "Initial findings", 1)
 
-        # Step 2-3: Model consultations
-        actions = tool.get_required_actions(2, "medium", "Model findings", 4)
-        assert any("Review the model response" in action for action in actions)
-
-        # Final step: Synthesis
-        actions = tool.get_required_actions(4, "high", "All findings", 4)
-        assert any("All models have been consulted" in action for action in actions)
-        assert any("Synthesize all perspectives" in action for action in actions)
+        # Check that all expected actions are present
+        assert any("consult all specified models in parallel" in action for action in actions)
+        assert any("Models will receive the same prompt" in action for action in actions)
+        assert any("cross-feedback is enabled" in action for action in actions)
+        assert any("receive all responses" in action for action in actions)
+        assert any("single result" in action for action in actions)
 
     def test_prepare_step_data(self):
         """Test step data preparation for consensus workflow."""
@@ -293,27 +319,23 @@ class TestConsensusTool:
         assert request.models[0]["stance"] == "neutral"
 
     def test_handle_work_continuation(self):
-        """Test work continuation handling - legacy method for compatibility."""
+        """Test work continuation handling - legacy method for parallel workflow."""
         tool = ConsensusTool()
         tool.models_to_consult = [{"model": "flash", "stance": "neutral"}, {"model": "o3-mini", "stance": "for"}]
 
-        # Note: In the new workflow, model consultation happens DURING steps in execute_workflow
-        # This method is kept for compatibility but not actively used in the step-by-step flow
-
-        # Test after step 1
+        # In the new parallel workflow, this method is not used and simply returns
+        # the response_data unchanged
         request = Mock(step_number=1, current_model_index=0)
-        response_data = {}
+        response_data = {"test": "data"}
 
         result = tool.handle_work_continuation(response_data, request)
-        # The method still exists but returns legacy status for compatibility
-        assert "status" in result
+        # The method returns response_data unchanged in the new workflow
+        assert result == response_data
 
-        # Test between model consultations
-        request = Mock(step_number=2, current_model_index=1)
-        response_data = {}
-
-        result = tool.handle_work_continuation(response_data, request)
-        assert "status" in result
+        # Test with different data
+        response_data2 = {"other": "info", "status": "existing"}
+        result2 = tool.handle_work_continuation(response_data2, request)
+        assert result2 == response_data2
 
     def test_customize_workflow_response(self):
         """Test response customization for consensus workflow."""

@@ -57,40 +57,43 @@ class TestDisabledTools:
 
     def test_tool_filtering_logic(self):
         """Test the complete filtering logic using the actual server functions."""
-        # Simulate ALL_TOOLS
+        # Simulate ALL_TOOLS - simplified version only has 2 tools
         ALL_TOOLS = {
             "chat": MockTool("chat"),
+            "consensus": MockTool("consensus"),
+        }
+
+        # Add some mock tools that were removed to test filtering
+        ALL_TOOLS_WITH_REMOVED = {
+            "chat": MockTool("chat"),
+            "consensus": MockTool("consensus"),
             "debug": MockTool("debug"),
             "analyze": MockTool("analyze"),
-            "version": MockTool("version"),
-            "listmodels": MockTool("listmodels"),
         }
 
         # Test case 1: No tools disabled
         disabled_tools = set()
         enabled_tools = apply_tool_filter(ALL_TOOLS, disabled_tools)
 
-        assert len(enabled_tools) == 5  # All tools included
+        assert len(enabled_tools) == 2  # All tools included
         assert set(enabled_tools.keys()) == set(ALL_TOOLS.keys())
 
         # Test case 2: Disable some regular tools
         disabled_tools = {"debug", "analyze"}
-        enabled_tools = apply_tool_filter(ALL_TOOLS, disabled_tools)
+        enabled_tools = apply_tool_filter(ALL_TOOLS_WITH_REMOVED, disabled_tools)
 
-        assert len(enabled_tools) == 3  # chat, version, listmodels
+        assert len(enabled_tools) == 2  # chat, consensus (only 2 tools remain)
         assert "debug" not in enabled_tools
         assert "analyze" not in enabled_tools
         assert "chat" in enabled_tools
-        assert "version" in enabled_tools
-        assert "listmodels" in enabled_tools
+        assert "consensus" in enabled_tools
 
-        # Test case 3: Attempt to disable essential tools
-        disabled_tools = {"version", "chat"}
+        # Test case 3: Attempt to disable tools (simplified version has no essential tools)
+        disabled_tools = {"chat"}
         enabled_tools = apply_tool_filter(ALL_TOOLS, disabled_tools)
 
-        assert "version" in enabled_tools  # Essential tool not disabled
-        assert "chat" not in enabled_tools  # Regular tool disabled
-        assert "listmodels" in enabled_tools  # Essential tool included
+        assert "chat" not in enabled_tools  # Tool disabled as requested
+        assert "consensus" in enabled_tools  # Other tool not affected
 
     def test_unknown_tools_warning(self, caplog):
         """Test that unknown tool names generate appropriate warnings."""
@@ -108,19 +111,20 @@ class TestDisabledTools:
             assert "Unknown tools in DISABLED_TOOLS: ['another_unknown', 'unknown_tool']" in caplog.text
 
     def test_essential_tools_warning(self, caplog):
-        """Test warning when trying to disable essential tools."""
+        """Test warning when trying to disable non-existent tools."""
+        # In the simplified version, we have no essential tools
         ALL_TOOLS = {
             "chat": MockTool("chat"),
-            "debug": MockTool("debug"),
-            "analyze": MockTool("analyze"),
-            "version": MockTool("version"),
-            "listmodels": MockTool("listmodels"),
+            "consensus": MockTool("consensus"),
         }
-        disabled_tools = {"version", "chat", "debug"}
+        disabled_tools = {"version", "debug", "chat"}  # version and debug don't exist
 
         with caplog.at_level(logging.WARNING):
             validate_disabled_tools(disabled_tools, ALL_TOOLS)
-            assert "Cannot disable essential tools: ['version']" in caplog.text
+            # Should warn about non-existent tools, not essential tools
+            assert "Unknown tools in DISABLED_TOOLS" in caplog.text
+            assert "version" in caplog.text
+            assert "debug" in caplog.text
 
     @pytest.mark.parametrize(
         "env_value,expected",

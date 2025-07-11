@@ -23,7 +23,8 @@ class TestPromptSizeLimitBugFix:
         short_user_prompt = "Thanks for the help!"
 
         # Simulate conversation history (large content)
-        conversation_history = "=== CONVERSATION HISTORY ===\n" + ("Previous conversation content. " * 5000)
+        # Need to create a prompt larger than 360,000 characters (current limit with MAX_MCP_OUTPUT_TOKENS=150000)
+        conversation_history = "=== CONVERSATION HISTORY ===\n" + ("Previous conversation content. " * 15000)
 
         # Simulate enhanced prompt with conversation history (what server.py creates)
         enhanced_prompt = f"{conversation_history}\n\n=== NEW USER INPUT ===\n{short_user_prompt}"
