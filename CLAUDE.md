@@ -298,4 +298,42 @@ isort --check-only .
 - All dependencies from `requirements.txt` installed
 - Proper API keys configured in `.env` file
 
+### Versioning Guidelines
+
+The project follows **Semantic Versioning** (MAJOR.MINOR.PATCH):
+
+- **MAJOR**: Breaking changes or major architectural shifts (e.g., 5.x → 6.x for the simplified fork)
+- **MINOR**: New features or significant improvements (e.g., adding Grok-4 support)
+- **PATCH**: Bug fixes and small improvements (e.g., fixing token limit validation)
+
+#### Version Bumping Process
+
+1. **Update version using the bump script:**
+   ```bash
+   # For bug fixes:
+   python scripts/bump_version.py patch
+
+   # For new features:
+   python scripts/bump_version.py minor
+
+   # For breaking changes:
+   python scripts/bump_version.py major
+   ```
+
+2. **The script automatically:**
+   - Updates `__version__` in `config.py`
+   - Updates `__updated__` to current date
+   - Preserves file formatting
+
+3. **Manual steps after bumping:**
+   - Update CHANGELOG.md with the new version entry
+   - Document all changes under appropriate categories (Added/Changed/Fixed/Removed)
+   - Commit both config.py and CHANGELOG.md changes together
+
+#### Version History Notes
+
+- **5.8.2**: Last version before the simplified fork
+- **6.0.0**: First version of the simplified fork (major version bump due to breaking changes)
+- **Current**: Version is maintained in `config.py` as the single source of truth
+
 This guide provides everything needed to efficiently work with the Simplified Zen MCP Server codebase using Claude.

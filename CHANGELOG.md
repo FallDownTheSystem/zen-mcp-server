@@ -1,6 +1,15 @@
 # Changelog
 
-## [2.2.1] - 2025-07-11
+## [6.2.3] - 2025-07-11
+
+### Added
+- **Response Timing**: Added timing information to all model responses
+  - Displays "<Model name> took X.XX seconds to respond." at end of each response
+  - Helps identify slow models when running consensus across multiple models
+  - Implemented in SimpleTool base class, applies to both Chat and Consensus tools
+  - Includes timing even for error responses to track failed model performance
+
+## [6.2.2] - 2025-07-11
 
 ### Fixed
 - **Token/Character Limit Mismatch**: Fixed validation bug where character limits were compared against token counts
@@ -8,8 +17,17 @@
   - Prevents false validation failures when using large file contexts
   - Fixes issue where ~15k token files would fail against 60k character limit
   - Added comprehensive tests to prevent regression
+- **Consensus Tool Error**: Fixed model context not being provided for file preparation
+  - Added ModelContext creation for each model in _consult_model method
+  - Ensures proper token allocation for file content across models
 
-## [2.2.0] - 2025-07-11
+### Changed
+- **Consensus Prompts**: Transformed from judgment-based to collaborative solution-finding
+  - Removed confidence scores and timeline estimates
+  - Focus on balanced analysis, trade-offs, and practical recommendations
+  - Encourages models to build on each other's insights during refinement phase
+
+## [6.2.1] - 2025-07-11
 
 ### Changed
 - **Consensus Tool Simplified**: Removed step-based workflow parameters for cleaner interface
@@ -35,7 +53,7 @@
   - Removed obsolete workflow-based test files
   - No impact on functionality - workflow classes were no longer used after consensus simplification
 
-## [2.1.1] - 2025-07-11
+## [6.2.0] - 2025-07-11
 
 ### Changed
 - **Improved README**: Updated installation instructions to match original repository format
@@ -44,7 +62,7 @@
   - Improved configuration documentation with detailed environment variables
   - Added collapsible sections for better organization
 
-## [2.1.0] - 2025-07-11
+## [6.1.0] - 2025-07-11
 
 ### Added
 - **Grok-4 Support**: Added support for xAI's latest Grok-4 model (grok-4-0709)
@@ -53,7 +71,7 @@
   - Grok-4 supports extended thinking/reasoning capabilities
   - Updated tests and documentation
 
-## [2.0.0] - 2025-07-11
+## [6.0.1] - 2025-07-11
 
 ### Changed
 - **Breaking Change**: Removed stance-based analysis from consensus tool
@@ -63,7 +81,7 @@
   - System prompt updated to encourage balanced perspectives
   - All tests updated to work without stances
 
-## [Simplified Fork] - 2025-07-11
+## [6.0.0] - 2025-07-11 - Simplified Fork
 
 ### Changed
 - Simplified codebase to include only two essential tools: Chat and Consensus
