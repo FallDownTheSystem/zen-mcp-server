@@ -492,23 +492,20 @@ Other AI models have also provided their perspectives on this same question. Her
 
         # Add refinement instructions
         prompt += """
-=== REFINEMENT REQUEST ===
+=== OTHER APPROACHES ===
 
-After reviewing these other perspectives, please provide a refined response that:
+Review all solutions including yours. Focus on:
 
-1. Acknowledges valuable insights from other models that enhance your analysis
-2. Clarifies or defends your position where you disagree with others
-3. Identifies any consensus points across all models
-4. Highlights critical disagreements and their implications
-5. Updates your recommendation if the collective insights warrant it
+1. Is there a better approach here that you missed?
+2. Does someone have a key insight that makes the problem simpler?
+3. Can you improve on the best approach you see?
 
-IMPORTANT: This refined response will be the ONLY response shown to the user from your model.
-Your initial response will NOT be shown. Therefore, ensure your refined response is:
-- Complete and self-contained (don't reference "as I mentioned earlier")
-- Comprehensive, covering all aspects of the question
-- Clear about which insights from other models influenced your thinking
+If you see a superior solution, adopt and enhance it.
+If your approach remains best, explain why clearly.
+Don't defend for the sake of defending - find what actually works best.
 
-Your refined response should be thorough while incorporating the cross-model insights.
+IMPORTANT: Your response will replace your initial one, so make it complete and self-contained.
+Use the same format as before (## Approach, ## Why This Works, ## Implementation, ## Trade-offs).
 """
 
         return prompt

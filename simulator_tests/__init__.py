@@ -9,8 +9,8 @@ from .base_test import BaseSimulatorTest
 from .test_basic_conversation import BasicConversationTest
 from .test_chat_simple_validation import ChatSimpleValidationTest
 from .test_consensus_conversation import TestConsensusConversation
-from .test_consensus_three_models import TestConsensusThreeModels
-from .test_consensus_workflow_accurate import TestConsensusWorkflowAccurate
+# from .test_consensus_three_models import TestConsensusThreeModels  # File doesn't exist
+# from .test_consensus_workflow_accurate import TestConsensusWorkflowAccurate  # File doesn't exist
 from .test_content_validation import ContentValidationTest
 from .test_line_number_validation import LineNumberValidationTest
 from .test_logs_validation import LogsValidationTest
@@ -20,9 +20,9 @@ from .test_o3_pro_expensive import O3ProExpensiveTest
 from .test_ollama_custom_url import OllamaCustomUrlTest
 from .test_openrouter_fallback import OpenRouterFallbackTest
 from .test_openrouter_models import OpenRouterModelsTest
-from .test_per_tool_deduplication import PerToolDeduplicationTest
+# from .test_per_tool_deduplication import PerToolDeduplicationTest  # File doesn't exist
 from .test_prompt_size_limit_bug import PromptSizeLimitBugTest
-from .test_token_allocation_validation import TokenAllocationValidationTest
+# from .test_token_allocation_validation import TokenAllocationValidationTest  # File doesn't exist
 from .test_vision_capability import VisionCapabilityTest
 from .test_xai_models import XAIModelsTest
 
@@ -31,7 +31,7 @@ TEST_REGISTRY = {
     "basic_conversation": BasicConversationTest,
     "chat_validation": ChatSimpleValidationTest,
     "content_validation": ContentValidationTest,
-    "per_tool_deduplication": PerToolDeduplicationTest,
+    # "per_tool_deduplication": PerToolDeduplicationTest,  # File doesn't exist
     "line_number_validation": LineNumberValidationTest,
     "logs_validation": LogsValidationTest,
     "model_thinking_config": TestModelThinkingConfig,
@@ -39,12 +39,12 @@ TEST_REGISTRY = {
     "ollama_custom_url": OllamaCustomUrlTest,
     "openrouter_fallback": OpenRouterFallbackTest,
     "openrouter_models": OpenRouterModelsTest,
-    "token_allocation_validation": TokenAllocationValidationTest,
+    # "token_allocation_validation": TokenAllocationValidationTest,  # File doesn't exist
     "vision_capability": VisionCapabilityTest,
     "xai_models": XAIModelsTest,
     "consensus_conversation": TestConsensusConversation,
-    "consensus_workflow_accurate": TestConsensusWorkflowAccurate,
-    "consensus_three_models": TestConsensusThreeModels,
+    # "consensus_workflow_accurate": TestConsensusWorkflowAccurate,  # File doesn't exist
+    # "consensus_three_models": TestConsensusThreeModels,  # File doesn't exist
     "prompt_size_limit_bug": PromptSizeLimitBugTest,
     # "o3_pro_expensive": O3ProExpensiveTest,  # COMMENTED OUT - too expensive to run by default
 }
@@ -54,7 +54,7 @@ __all__ = [
     "BasicConversationTest",
     "ChatSimpleValidationTest",
     "ContentValidationTest",
-    "PerToolDeduplicationTest",
+    # "PerToolDeduplicationTest",  # File doesn't exist
     "LineNumberValidationTest",
     "LogsValidationTest",
     "TestModelThinkingConfig",
@@ -63,12 +63,12 @@ __all__ = [
     "OllamaCustomUrlTest",
     "OpenRouterFallbackTest",
     "OpenRouterModelsTest",
-    "TokenAllocationValidationTest",
+    # "TokenAllocationValidationTest",  # File doesn't exist
     "VisionCapabilityTest",
     "XAIModelsTest",
     "TestConsensusConversation",
-    "TestConsensusWorkflowAccurate",
-    "TestConsensusThreeModels",
+    # "TestConsensusWorkflowAccurate",  # File doesn't exist
+    # "TestConsensusThreeModels",  # File doesn't exist
     "PromptSizeLimitBugTest",
     "TEST_REGISTRY",
 ]

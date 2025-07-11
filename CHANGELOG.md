@@ -1,5 +1,16 @@
 # Changelog
 
+## [6.2.5] - 2025-07-11
+
+### Changed
+- **Consensus Tool Prompts**: Refocused on breakthrough discovery and insight recognition
+  - System prompt now emphasizes finding the key insight that makes everything click
+  - Simplified format: Approach → Why This Works → Implementation → Trade-offs
+  - Cross-feedback prompt changed from "REFINEMENT REQUEST" to "OTHER APPROACHES"
+  - Encourages models to adopt superior solutions rather than defend positions
+  - Aligned with Grok 4's multi-agent approach where agents spot each other's best insights
+  - Removed consensus-building language in favor of best-solution-finding
+
 ## [6.2.4] - 2025-07-11
 
 ### Improved

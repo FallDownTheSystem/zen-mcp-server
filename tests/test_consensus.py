@@ -135,7 +135,7 @@ class TestConsensusTool:
         assert "What is the best approach?" in prompt
         assert "I think approach A is best" in prompt
         assert "Approach B might be better" in prompt
-        assert "REFINEMENT REQUEST" in prompt
+        assert "OTHER APPROACHES" in prompt
 
         # Test custom prompt
         custom = "Custom refinement instructions"
