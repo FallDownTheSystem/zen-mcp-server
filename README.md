@@ -1,5 +1,7 @@
 # Zen MCP Server - Simplified
 
+> **Note:** This is a fork based on [https://github.com/BeehiveInnovations/zen-mcp-server](https://github.com/BeehiveInnovations/zen-mcp-server)
+
 A streamlined MCP (Model Context Protocol) server that provides two powerful AI tools for Claude Desktop and other MCP clients.
 
 ## Overview
@@ -20,10 +22,14 @@ The server supports multiple AI providers including OpenAI, Google Gemini, xAI, 
 
 ### Installation
 
-#### Option 1: uvx (Recommended for Claude Desktop)
+#### Option 1: uvx (Recommended for Claude Desktop & Claude Code)
 
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
-2. Add to Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+2. Add to your config file:
+   - **Claude Desktop**:
+     - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+     - Windows: `C:\Users\<username>\AppData\Roaming\Claude\claude_desktop_config.json`
+   - **Claude Code CLI**: Create `.mcp.json` in your project root
 
 ```json
 {
@@ -40,7 +46,7 @@ The server supports multiple AI providers including OpenAI, Google Gemini, xAI, 
 }
 ```
 
-3. Restart Claude Desktop
+3. Restart Claude Desktop or reload Claude Code CLI
 
 #### Option 2: Traditional Setup
 
@@ -48,6 +54,37 @@ The server supports multiple AI providers including OpenAI, Google Gemini, xAI, 
 git clone https://github.com/FallDownTheSystem/zen-mcp-server.git
 cd zen-mcp-server
 ./run-server.sh
+```
+
+For Claude Code CLI with traditional setup, you can configure it using:
+
+**CLI Command (Recommended):**
+```bash
+# Project-specific (stored in .mcp.json)
+claude mcp add -s project zen -e GEMINI_API_KEY=your-key -e OPENAI_API_KEY=your-key -- python /path/to/zen-mcp-server/server.py
+
+# Or global/user-wide
+claude mcp add -s user zen -e GEMINI_API_KEY=your-key -e OPENAI_API_KEY=your-key -- python /path/to/zen-mcp-server/server.py
+```
+
+**Manual Configuration:**
+Add to your configuration file:
+- **Project-specific**: `.mcp.json` in your project root
+- **User-specific**: `.claude.json` (can contain global or project-specific MCP servers)
+
+```json
+{
+  "mcpServers": {
+    "zen": {
+      "command": "python",
+      "args": ["/path/to/zen-mcp-server/server.py"],
+      "env": {
+        "GEMINI_API_KEY": "your-key",
+        "OPENAI_API_KEY": "your-key"
+      }
+    }
+  }
+}
 ```
 
 ### Configuration
@@ -148,7 +185,7 @@ This approach is inspired by Grok 4's multi-agent system, where the real value c
 - `continuation_id`: Continue a previous consensus discussion
 
 **Key Benefits:**
-- **3x faster** than sequential execution - all models work in parallel
+- **Faster** than sequential execution - all models work in parallel
 - **Breakthrough discovery** - when one model finds the key insight, others can recognize and build on it
 - **Robust error handling** - if one model fails, others continue without interruption
 - **Evolution of thought** - see how perspectives change when models learn from each other
@@ -340,40 +377,6 @@ The Docker deployment includes:
 - Volume persistence for logs
 - Security hardening (non-root user, read-only filesystem)
 - Resource limits and monitoring
-
-### Integration with Other MCP Clients
-
-#### Gemini CLI
-While connection works, tool invocation is not yet fully functional. To configure:
-
-```json
-// ~/.gemini/settings.json
-{
-  "mcpServers": {
-    "zen": {
-      "command": "/path/to/zen-mcp-server/zen-mcp-server"
-    }
-  }
-}
-```
-
-#### Claude Code CLI
-For project-specific configuration, create `.mcp.json` in your project root:
-
-```json
-{
-  "mcpServers": {
-    "zen": {
-      "command": "python",
-      "args": ["/path/to/zen-mcp-server/server.py"],
-      "env": {
-        "GEMINI_API_KEY": "your-key",
-        "OPENAI_API_KEY": "your-key"
-      }
-    }
-  }
-}
-```
 
 ## License
 

@@ -782,99 +782,6 @@ function Test-ClaudeCliIntegration {
     }
 }
 
-# Check and update Gemini CLI configuration
-function Test-GeminiCliIntegration {
-    param([string]$ScriptDir)
-    
-    $zenWrapper = Join-Path $ScriptDir "zen-mcp-server.cmd"
-    
-    # Check if Gemini settings file exists (Windows path)
-    $geminiConfig = "$env:USERPROFILE\.gemini\settings.json"
-    if (!(Test-Path $geminiConfig)) {
-        # Gemini CLI not installed or not configured
-        return
-    }
-    
-    # Check if zen is already configured
-    $configContent = Get-Content $geminiConfig -Raw -ErrorAction SilentlyContinue
-    if ($configContent -and $configContent -match '"zen"') {
-        # Already configured
-        return
-    }
-    
-    # Ask user if they want to add Zen to Gemini CLI
-    Write-Host ""
-    $response = Read-Host "Configure Zen for Gemini CLI? (Y/n)"
-    if ($response -eq 'n' -or $response -eq 'N') {
-        Write-Info "Skipping Gemini CLI integration"
-        return
-    }
-    
-    # Ensure wrapper script exists
-    if (!(Test-Path $zenWrapper)) {
-        Write-Info "Creating wrapper script for Gemini CLI..."
-        @"
-@echo off
-cd /d "%~dp0"
-if exist ".zen_venv\Scripts\python.exe" (
-    .zen_venv\Scripts\python.exe server.py %*
-) else (
-    python server.py %*
-)
-"@ | Out-File -FilePath $zenWrapper -Encoding UTF8
-        
-        Write-Success "Created zen-mcp-server.cmd wrapper script"
-    }
-    
-    # Update Gemini settings
-    Write-Info "Updating Gemini CLI configuration..."
-    
-    try {
-        # Create backup
-        $backupPath = "$geminiConfig.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        Copy-Item $geminiConfig $backupPath -ErrorAction SilentlyContinue
-        
-        # Read existing config or create new one
-        $config = @{}
-        if (Test-Path $geminiConfig) {
-            $config = Get-Content $geminiConfig -Raw | ConvertFrom-Json
-        }
-        
-        # Ensure mcpServers exists
-        if (!$config.mcpServers) {
-            $config | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value @{} -Force
-        }
-        
-        # Add zen server
-        $zenConfig = @{
-            command = $zenWrapper
-        }
-        
-        $config.mcpServers | Add-Member -MemberType NoteProperty -Name "zen" -Value $zenConfig -Force
-        
-        # Write updated config
-        $config | ConvertTo-Json -Depth 10 | Out-File $geminiConfig -Encoding UTF8
-        
-        Write-Success "Successfully configured Gemini CLI"
-        Write-Host "  Config: $geminiConfig" -ForegroundColor Gray
-        Write-Host "  Restart Gemini CLI to use Zen MCP Server" -ForegroundColor Gray
-        
-    } catch {
-        Write-Error "Failed to update Gemini CLI config: $_"
-        Write-Host ""
-        Write-Host "Manual config location: $geminiConfig"
-        Write-Host "Add this configuration:"
-        Write-Host @"
-{
-  "mcpServers": {
-    "zen": {
-      "command": "$zenWrapper"
-    }
-  }
-}
-"@ -ForegroundColor Yellow
-    }
-}
 
 # Display configuration instructions
 function Show-ConfigInstructions {
@@ -1183,10 +1090,7 @@ function Start-MainProcess {
     Test-ClaudeCliIntegration $pythonPath $serverPath
     Test-ClaudeDesktopIntegration $pythonPath $serverPath
     
-    # Step 10: Check Gemini CLI integration
-    Test-GeminiCliIntegration (Split-Path $serverPath -Parent)
-    
-    # Step 11: Setup logging directory
+    # Step 10: Setup logging directory
     Initialize-Logging
     
     # Step 12: Display log information
