@@ -33,19 +33,15 @@ Available tests:
     openrouter_fallback         - OpenRouter fallback mechanism testing
     openrouter_models           - OpenRouter models availability testing
     token_allocation_validation - Token allocation and limits validation
-    testgen_validation          - TestGen tool validation with specific test function
-    refactor_validation         - Refactor tool validation with codesmells
-    debug_validation            - Debug tool validation with actual bugs
-    conversation_chain_validation - Conversation chain continuity validation
 
 Quick Test Mode (for time-limited testing):
     Use --quick to run the essential 6 tests that provide maximum coverage:
-    - cross_tool_continuation (cross-tool conversation memory)
     - basic_conversation (basic chat functionality)
     - content_validation (content validation and deduplication)
     - model_thinking_config (flash/flashlite model testing)
     - o3_model_selection (o3 model selection testing)
-    - per_tool_deduplication (file deduplication for individual tools)
+    - consensus_workflow_accurate (consensus tool testing)
+    - chat_validation (chat tool validation)
 
 Examples:
     # Run all tests
@@ -110,12 +106,12 @@ class CommunicationSimulator:
         # Define quick mode tests (essential tests for time-limited testing)
         # Focus on tests that work with current tool configurations
         self.quick_mode_tests = [
-            "cross_tool_continuation",  # Cross-tool conversation memory
             "basic_conversation",  # Basic chat functionality
             "content_validation",  # Content validation and deduplication
             "model_thinking_config",  # Flash/flashlite model testing
             "o3_model_selection",  # O3 model selection testing
-            "per_tool_deduplication",  # File deduplication for individual tools
+            "consensus_workflow_accurate",  # Consensus tool testing
+            "chat_validation",  # Chat tool validation
         ]
 
         # If quick mode is enabled, override selected_tests
