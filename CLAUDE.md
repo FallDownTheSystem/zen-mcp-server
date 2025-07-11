@@ -172,30 +172,26 @@ This simplified version includes only two tools:
    - Two-phase workflow: initial responses + cross-model refinement
    - All models consulted simultaneously for speed
    - Models can see each other's responses and refine their answers
-   - Stance-based analysis (for/against/neutral)
-   - Single tool call (no more multi-step workflow)
+   - Single tool call with simplified interface
    - Robust error handling - partial failures don't stop other models
    - Optional: disable cross-feedback for faster single-phase consensus
 
-### Using the New Consensus Tool
+### Using the Consensus Tool
 
-The consensus tool now operates in a single call with parallel processing:
+The consensus tool operates in a single call with parallel processing:
 
 ```python
 # Example request structure:
 {
-    "step": "Should we implement real-time collaboration features?",
-    "step_number": 1,
-    "total_steps": 1,
-    "next_step_required": false,
-    "findings": "Initial analysis shows user demand but technical complexity",
+    "prompt": "Should we implement real-time collaboration features?",
     "models": [
         {"model": "gemini-pro"},
         {"model": "o3"},
         {"model": "flash"}
     ],
-    "enable_cross_feedback": true,  # Optional, defaults to true
-    "cross_feedback_prompt": null   # Optional custom refinement prompt
+    "relevant_files": ["/path/to/spec.md"],  # Optional
+    "enable_cross_feedback": true,           # Optional, defaults to true
+    "cross_feedback_prompt": null            # Optional custom refinement prompt
 }
 ```
 

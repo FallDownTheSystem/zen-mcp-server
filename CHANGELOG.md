@@ -1,6 +1,32 @@
 # Changelog
 
-## [2.1.1] - 2024-01-12
+## [2.2.0] - 2025-07-11
+
+### Changed
+- **Consensus Tool Simplified**: Removed step-based workflow parameters for cleaner interface
+  - Changed from WorkflowTool to SimpleTool base class
+  - Replaced `step` parameter with `prompt` for clarity
+  - Removed unnecessary fields: `step_number`, `total_steps`, `next_step_required`, `findings`, `confidence`
+  - Tool now inherits from ToolRequest instead of WorkflowRequest
+  - Simplified test suite to match new interface
+  - No functional changes - still parallel execution with cross-model feedback
+
+### Improved
+- **Tool Descriptions**: Reduced verbosity by 70-80% to preserve context
+  - Chat tool: 297 → 66 words (78% reduction)
+  - Consensus tool: 424 → 80 words (81% reduction)
+  - Removed redundant use cases and implementation details
+  - Focused on essential information for tool selection
+
+### Removed
+- **Workflow Infrastructure**: Removed unused workflow base classes and utilities
+  - Deleted `tools/workflow/` directory and all its contents
+  - Removed `WorkflowRequest`, `BaseWorkflowRequest`, and `ConsolidatedFindings` from base_models.py
+  - Cleaned up imports in `tools/shared/__init__.py`
+  - Removed obsolete workflow-based test files
+  - No impact on functionality - workflow classes were no longer used after consensus simplification
+
+## [2.1.1] - 2025-07-11
 
 ### Changed
 - **Improved README**: Updated installation instructions to match original repository format
@@ -9,7 +35,7 @@
   - Improved configuration documentation with detailed environment variables
   - Added collapsible sections for better organization
 
-## [2.1.0] - 2024-01-12
+## [2.1.0] - 2025-07-11
 
 ### Added
 - **Grok-4 Support**: Added support for xAI's latest Grok-4 model (grok-4-0709)
@@ -18,7 +44,7 @@
   - Grok-4 supports extended thinking/reasoning capabilities
   - Updated tests and documentation
 
-## [2.0.0] - 2024-01-12
+## [2.0.0] - 2025-07-11
 
 ### Changed
 - **Breaking Change**: Removed stance-based analysis from consensus tool
@@ -28,7 +54,7 @@
   - System prompt updated to encourage balanced perspectives
   - All tests updated to work without stances
 
-## [Simplified Fork] - 2024-01-11
+## [Simplified Fork] - 2025-07-11
 
 ### Changed
 - Simplified codebase to include only two essential tools: Chat and Consensus
@@ -78,11 +104,7 @@
 ```python
 # Single call to get consensus with cross-model feedback
 arguments = {
-    "step": "Should we implement real-time collaboration?",
-    "step_number": 1,
-    "total_steps": 1,
-    "next_step_required": false,
-    "findings": "30% of support tickets request this feature",
+    "prompt": "Should we implement real-time collaboration? 30% of support tickets request this feature",
     "models": [
         {"model": "gemini-pro"},
         {"model": "o3-mini"},

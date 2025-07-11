@@ -113,15 +113,7 @@ async def test_parallel_consensus_workflow():
 
     # Create test arguments
     arguments = {
-        "step": "Should we implement real-time collaboration features in our application?",
-        "step_number": 1,
-        "total_steps": 1,
-        "next_step_required": False,
-        "findings": """Initial market research shows:
-- 30% of support tickets request real-time features
-- Competitors have basic real-time collaboration
-- Current architecture uses REST APIs only
-- Team has no WebSocket experience""",
+        "prompt": "Should we implement real-time collaboration features in our application? Initial market research shows: 30% of support tickets request real-time features, competitors have basic real-time collaboration, current architecture uses REST APIs only, team has no WebSocket experience.",
         "models": [{"model": "gemini-2.5-pro"}, {"model": "o3-mini"}],
         "relevant_files": [],
         "enable_cross_feedback": True,
@@ -134,7 +126,7 @@ async def test_parallel_consensus_workflow():
         start_time = datetime.now()
 
         # Execute the workflow
-        result = await tool.execute_workflow(arguments)
+        result = await tool.execute(arguments)
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -194,7 +186,7 @@ async def test_parallel_consensus_workflow():
         # Verify the response structure
         assert response_data["status"] == "consensus_complete"
         assert response_data["consensus_complete"] is True
-        assert response_data["initial_prompt"] == arguments["step"]
+        assert response_data["initial_prompt"] == arguments["prompt"]
         assert response_data["models_consulted"] == 2
         assert response_data["successful_initial_responses"] == 2
         assert response_data["cross_feedback_enabled"] is True
@@ -227,17 +219,13 @@ async def test_parallel_execution_with_failure():
             raise ValueError(f"Unknown model: {model_name}")
 
     arguments = {
-        "step": "Test question for parallel execution",
-        "step_number": 1,
-        "total_steps": 1,
-        "next_step_required": False,
-        "findings": "Testing error handling",
+        "prompt": "Test question for parallel execution - Testing error handling",
         "models": [{"model": "gemini-2.5-pro"}, {"model": "o3-mini"}, {"model": "gemini-2.5-pro"}],  # This will fail
         "enable_cross_feedback": False,  # Disable to simplify test
     }
 
     with patch.object(tool, "get_model_provider", side_effect=mock_get_model_provider):
-        result = await tool.execute_workflow(arguments)
+        result = await tool.execute(arguments)
 
         response_data = json.loads(result[0].text)
 
@@ -271,18 +259,14 @@ async def test_cross_feedback_disabled():
     provider = MockProvider("gemini")
 
     arguments = {
-        "step": "Quick consensus test",
-        "step_number": 1,
-        "total_steps": 1,
-        "next_step_required": False,
-        "findings": "Need fast consensus",
+        "prompt": "Quick consensus test - Need fast consensus",
         "models": [{"model": "gemini-2.5-pro"}, {"model": "gemini-2.5-pro"}],
         "enable_cross_feedback": False,  # Disabled for speed
     }
 
     with patch.object(tool, "get_model_provider", return_value=provider):
         start_time = datetime.now()
-        result = await tool.execute_workflow(arguments)
+        result = await tool.execute(arguments)
         duration = (datetime.now() - start_time).total_seconds()
 
         response_data = json.loads(result[0].text)
