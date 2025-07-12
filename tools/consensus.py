@@ -282,24 +282,51 @@ class ConsensusTool(SimpleTool):
                 if initial.get("status") == "success":
                     model_name = initial["model"]
                     if model_name in refined_by_model:
-                        # Use refined response but with simplified structure
+                        # Use refined response but with combined metadata
                         refined = refined_by_model[model_name]
+                        # Combine metadata to show both initial and refinement times
+                        combined_metadata = initial["metadata"].copy()
+                        combined_metadata.update(
+                            {
+                                "initial_response_time": initial["metadata"]["response_time"],
+                                "refinement_response_time": refined["metadata"]["response_time"],
+                                "total_response_time": initial["metadata"]["response_time"]
+                                + refined["metadata"]["response_time"],
+                                "input_tokens_initial": initial["metadata"].get("input_tokens", 0),
+                                "output_tokens_initial": initial["metadata"].get("output_tokens", 0),
+                                "input_tokens_refinement": refined["metadata"].get("input_tokens", 0),
+                                "output_tokens_refinement": refined["metadata"].get("output_tokens", 0),
+                                "total_input_tokens": initial["metadata"].get("input_tokens", 0)
+                                + refined["metadata"].get("input_tokens", 0),
+                                "total_output_tokens": initial["metadata"].get("output_tokens", 0)
+                                + refined["metadata"].get("output_tokens", 0),
+                            }
+                        )
+                        # Remove the single response_time, input_tokens, and output_tokens fields
+                        combined_metadata.pop("response_time", None)
+                        combined_metadata.pop("input_tokens", None)
+                        combined_metadata.pop("output_tokens", None)
+
                         final_responses.append(
                             {
                                 "model": model_name,
                                 "status": "success",
                                 "response": refined["refined_response"],
-                                "metadata": refined["metadata"],
+                                "metadata": combined_metadata,
                             }
                         )
                     else:
-                        # Use initial response
+                        # Use initial response - rename response_time to initial_response_time for consistency
+                        metadata = initial["metadata"].copy()
+                        if "response_time" in metadata:
+                            metadata["initial_response_time"] = metadata.pop("response_time")
+                            metadata["total_response_time"] = metadata["initial_response_time"]
                         final_responses.append(
                             {
                                 "model": model_name,
                                 "status": "success",
                                 "response": initial["response"],
-                                "metadata": initial["metadata"],
+                                "metadata": metadata,
                             }
                         )
 

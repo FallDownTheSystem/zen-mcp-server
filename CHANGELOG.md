@@ -1,5 +1,15 @@
 # Changelog
 
+## [6.2.7] - 2025-07-12
+
+### Fixed
+- **Consensus Tool Response Timing**: Fixed timing metadata to report both initial and refinement response times separately
+  - Added `initial_response_time` and `refinement_response_time` fields to track each phase
+  - Added `total_response_time` field showing the sum of both phases
+  - Similarly separated token usage tracking with `input_tokens_initial`, `output_tokens_initial`, `input_tokens_refinement`, and `output_tokens_refinement`
+  - Provides total token counts in `total_input_tokens` and `total_output_tokens`
+  - For models without refinement phase, renamed `response_time` to `initial_response_time` for consistency
+
 ## [6.2.6] - 2025-07-12
 
 ### Removed
