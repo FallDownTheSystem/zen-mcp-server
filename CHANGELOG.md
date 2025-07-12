@@ -1,5 +1,14 @@
 # Changelog
 
+## [6.3.0] - 2025-07-12
+
+### Fixed
+- **Consensus Tool Parallel Execution**: Fixed critical performance issue where models were consulted sequentially instead of in parallel
+  - Added `await asyncio.to_thread()` wrapper to make synchronous `generate_content` calls non-blocking
+  - This allows true parallel execution when consulting multiple models
+  - Performance improvement: Total time is now max(individual model times) instead of sum(individual model times)
+  - Example: o3 (1 min) + Gemini (2 min) now takes 2 minutes total instead of 3 minutes
+
 ## [6.2.7] - 2025-07-12
 
 ### Fixed

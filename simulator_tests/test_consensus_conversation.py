@@ -78,25 +78,14 @@ class TestConsensusConversation(ConversationBaseTest):
             consensus_response, _ = self.call_mcp_tool(
                 "consensus",
                 {
-                    "step": "Based on our previous discussion about authentication, I need expert consensus: Should we implement OAuth2 or stick with simple session-based auth?",
-                    "step_number": 1,
-                    "total_steps": 2,
-                    "next_step_required": True,
-                    "findings": "Initial analysis needed on OAuth2 vs session-based authentication approaches for our web application",
+                    "prompt": "Based on our previous discussion about authentication, I need expert consensus: Should we implement OAuth2 or stick with simple session-based auth?",
                     "models": [
-                        {
-                            "model": "flash",
-                            "stance": "for",
-                            "stance_prompt": "Focus on OAuth2 benefits: security, scalability, and industry standards.",
-                        },
-                        {
-                            "model": "flash",
-                            "stance": "against",
-                            "stance_prompt": "Focus on OAuth2 complexity: implementation challenges and simpler alternatives.",
-                        },
+                        {"model": "flash"},
+                        {"model": "flash"},
                     ],
                     "continuation_id": continuation_id,
-                    "model": "flash",
+                    "enable_cross_feedback": True,
+                    "temperature": 0.2,
                 },
             )
 
@@ -119,11 +108,11 @@ class TestConsensusConversation(ConversationBaseTest):
                 self.logger.error(f"Failed to parse consensus response as JSON. Full response: {consensus_response}")
                 return False
 
-            # Check for step 1 status (Claude analysis + first model consultation)
-            expected_status = "analysis_and_first_model_consulted"
+            # Check for consensus completion status
+            expected_status = "consensus_complete"
             if consensus_data.get("status") != expected_status:
                 self.logger.error(
-                    f"Consensus step 1 failed with status: {consensus_data.get('status')}, expected: {expected_status}"
+                    f"Consensus failed with status: {consensus_data.get('status')}, expected: {expected_status}"
                 )
                 if "error" in consensus_data:
                     self.logger.error(f"Error: {consensus_data['error']}")
@@ -180,29 +169,34 @@ class TestConsensusConversation(ConversationBaseTest):
             # Phase 4: Verify response structure
             self.logger.info("Phase 4: Verifying consensus response structure")
 
-            # Check that we have model response from step 1
-            model_response = consensus_data.get("model_response")
-            if not model_response:
-                self.logger.error("Consensus step 1 response missing model_response")
+            # Check that we have responses
+            responses = consensus_data.get("responses")
+            if not responses:
+                self.logger.error("Consensus response missing 'responses' field")
                 return False
 
-            # Check that model response has expected structure
-            if not model_response.get("model") or not model_response.get("verdict"):
-                self.logger.error("Model response missing required fields (model or verdict)")
+            # Check that we got responses from multiple models
+            if len(responses) < 2:
+                self.logger.error(f"Expected at least 2 model responses, got: {len(responses)}")
                 return False
 
-            # Check step information
-            if consensus_data.get("step_number") != 1:
-                self.logger.error(f"Expected step_number 1, got: {consensus_data.get('step_number')}")
-                return False
+            # Check response structure
+            for i, response in enumerate(responses):
+                if not response.get("model"):
+                    self.logger.error(f"Response {i} missing 'model' field")
+                    return False
+                if not response.get("response"):
+                    self.logger.error(f"Response {i} missing 'response' field")
+                    return False
+                if response.get("status") != "success":
+                    self.logger.error(f"Response {i} has status: {response.get('status')}")
+                    return False
 
-            if not consensus_data.get("next_step_required"):
-                self.logger.error("Expected next_step_required=True for step 1")
-                return False
-
-            self.logger.info(f"Consensus step 1 consulted model: {model_response.get('model')}")
-            self.logger.info(f"Model stance: {model_response.get('stance', 'neutral')}")
-            self.logger.info(f"Response status: {model_response.get('status', 'unknown')}")
+            # Log summary
+            self.logger.info(f"Consensus gathered {len(responses)} model responses")
+            self.logger.info(f"Models consulted: {consensus_data.get('models_consulted')}")
+            self.logger.info(f"Successful responses: {consensus_data.get('successful_responses')}")
+            self.logger.info(f"Cross-feedback enabled: {consensus_data.get('cross_feedback_enabled')}")
 
             # Phase 5: Cross-tool continuation test
             self.logger.info("Phase 5: Testing cross-tool continuation from consensus")

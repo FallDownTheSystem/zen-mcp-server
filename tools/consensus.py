@@ -395,9 +395,10 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model with timing
+            # Call the model with timing (use asyncio.to_thread for parallel execution)
             start_time = time.time()
-            response = provider.generate_content(
+            response = await asyncio.to_thread(
+                provider.generate_content,
                 prompt=prompt,
                 model_name=model_name,
                 system_prompt=system_prompt,
@@ -453,9 +454,10 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model with the feedback and timing
+            # Call the model with the feedback and timing (use asyncio.to_thread for parallel execution)
             start_time = time.time()
-            response = provider.generate_content(
+            response = await asyncio.to_thread(
+                provider.generate_content,
                 prompt=feedback_prompt,
                 model_name=model_name,
                 system_prompt=system_prompt,
