@@ -1,5 +1,29 @@
 # Changelog
 
+## [6.3.1] - 2025-07-14
+
+### Fixed
+- **o3-pro Model Support**: Fixed o3-pro API integration issues
+  - Fixed response parsing to correctly extract text from `response.output[].content[].text` structure
+  - Fixed request format to use simple `input` and `instructions` parameters for the `/v1/responses` endpoint
+  - Removed unsupported `max_completion_tokens` parameter from responses API calls
+  - Added comprehensive logging for debugging o3-pro responses
+  - Increased default timeout from 30s to 5 minutes to accommodate o3-pro's longer processing times
+  - o3-pro now correctly uses "high" reasoning effort mode
+
+### Added
+- **Response Timeout Configuration**: Added environment variable support for custom timeouts
+  - `CUSTOM_CONNECT_TIMEOUT` - Connection timeout (default: 30s)
+  - `CUSTOM_READ_TIMEOUT` - Read timeout (default: 10 minutes)
+  - `CUSTOM_WRITE_TIMEOUT` - Write timeout (default: 10 minutes)
+  - `CUSTOM_POOL_TIMEOUT` - Pool timeout (default: 10 minutes)
+
+### Improved
+- **Developer Experience**: Allow Python environment setup without API keys
+  - Modified `run-server.sh` to warn but continue when API keys are missing
+  - Modified `run-server.ps1` to warn but continue when API keys are missing
+  - New contributors can now explore the codebase and run tests without obtaining API keys first
+
 ## [6.3.0] - 2025-07-12
 
 ### Fixed

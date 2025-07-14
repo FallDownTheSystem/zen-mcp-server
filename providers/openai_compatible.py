@@ -267,27 +267,33 @@ class OpenAICompatibleProvider(ModelProvider):
     def _safe_extract_output_text(self, response) -> str:
         """Safely extract output text from o3-pro response with validation.
         
-        o3-pro provides output_text directly on the response object,
-        not nested inside a content array.
+        The o3-pro response has an output array containing ResponseOutputMessage items
+        with ResponseOutputText content.
         """
         content = ""
         
-        # First check for direct output_text field (o3-pro format)
-        if hasattr(response, "output_text") and response.output_text:
+        # Check if response has output array (actual o3-pro format)
+        if hasattr(response, "output") and response.output:
+            # Iterate through output items
+            for output_item in response.output:
+                # Look for message type outputs
+                if hasattr(output_item, "type") and output_item.type == "message":
+                    # Check if it has content
+                    if hasattr(output_item, "content") and output_item.content:
+                        # Extract text from content items
+                        for content_item in output_item.content:
+                            if hasattr(content_item, "type") and content_item.type == "output_text":
+                                if hasattr(content_item, "text"):
+                                    content = content_item.text
+                                    logging.debug(f"Extracted from output message content: {len(content)} chars")
+                                    break
+                if content:
+                    break
+        
+        # Fallback: check for direct output_text field
+        if not content and hasattr(response, "output_text") and response.output_text:
             content = response.output_text
             logging.debug(f"Extracted output_text directly: {len(content)} chars")
-        # Then check nested structures for compatibility
-        elif hasattr(response, "output") and response.output:
-            if hasattr(response.output, "content") and response.output.content:
-                # Look for output_text in content array
-                for content_item in response.output.content:
-                    if hasattr(content_item, "type") and content_item.type == "output_text":
-                        content = content_item.text
-                        logging.debug(f"Extracted from content array: {len(content)} chars")
-                        break
-            elif hasattr(response.output, "text"):
-                content = response.output.text
-                logging.debug(f"Extracted from output.text: {len(content)} chars")
         
         if not content:
             logging.warning("No output text found in response")
@@ -336,15 +342,17 @@ class OpenAICompatibleProvider(ModelProvider):
         completion_params = {
             "model": model_name,
             "input": input_text.strip(),
+            "reasoning": {"effort": "high"},  # Use high effort for o3-pro
         }
         
         # Add instructions if we have them
         if instructions:
             completion_params["instructions"] = instructions
 
-        # Add max tokens if specified (using max_completion_tokens for responses endpoint)
+        # The responses endpoint doesn't support max_completion_tokens parameter
+        # We'll log it but not include it in the request
         if max_output_tokens:
-            completion_params["max_completion_tokens"] = max_output_tokens
+            logging.debug(f"max_output_tokens {max_output_tokens} requested but not supported by responses endpoint")
 
         # For responses endpoint, we only add parameters that are explicitly supported
         # Remove unsupported chat completion parameters that may cause API errors
@@ -364,6 +372,14 @@ class OpenAICompatibleProvider(ModelProvider):
 
                 # Use OpenAI client's responses endpoint
                 response = self.client.responses.create(**completion_params)
+                
+                # Log the raw response for debugging
+                logging.info(f"o3-pro raw response type: {type(response)}")
+                logging.info(f"o3-pro raw response: {response}")
+                
+                # Log response attributes
+                if hasattr(response, '__dict__'):
+                    logging.info(f"o3-pro response attributes: {list(response.__dict__.keys())}")
 
                 # Extract content and usage from responses endpoint format
                 # The response format is different for responses endpoint
