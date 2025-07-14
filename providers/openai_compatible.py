@@ -215,7 +215,7 @@ class OpenAICompatibleProvider(ModelProvider):
                 timeout_config = (
                     self.timeout_config
                     if hasattr(self, "timeout_config") and self.timeout_config
-                    else httpx.Timeout(30.0)
+                    else httpx.Timeout(300.0)  # 5 minutes default for o3-pro and other long-running models
                 )
 
                 # Create httpx client with minimal config to avoid proxy conflicts
@@ -302,7 +302,11 @@ class OpenAICompatibleProvider(ModelProvider):
         max_output_tokens: Optional[int] = None,
         **kwargs,
     ) -> ModelResponse:
-        """Generate content using the /v1/responses endpoint for o3-pro via OpenAI library."""
+        """Generate content using the /v1/responses endpoint for o3-pro via OpenAI library.
+        
+        Note: o3-pro can take several minutes to process complex requests, so we need
+        to ensure the client has appropriate timeout settings.
+        """
         # Convert messages to the correct format for responses endpoint
         input_messages = []
 
