@@ -24,7 +24,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             model_name="o3",
             friendly_name="OpenAI (O3)",
             context_window=200_000,  # 200K tokens
-            max_output_tokens=65536,  # 64K max output tokens
+            max_output_tokens=100_000,  # 100K max output tokens
             supports_extended_thinking=False,
             supports_system_prompts=True,
             supports_streaming=True,
@@ -42,7 +42,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             model_name="o3-mini",
             friendly_name="OpenAI (O3-mini)",
             context_window=200_000,  # 200K tokens
-            max_output_tokens=65536,  # 64K max output tokens
+            max_output_tokens=100_000,  # 100K max output tokens
             supports_extended_thinking=False,
             supports_system_prompts=True,
             supports_streaming=True,
@@ -60,7 +60,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             model_name="o3-pro-2025-06-10",
             friendly_name="OpenAI (O3-Pro)",
             context_window=200_000,  # 200K tokens
-            max_output_tokens=65536,  # 64K max output tokens
+            max_output_tokens=100_000,  # 100K max output tokens
             supports_extended_thinking=False,
             supports_system_prompts=True,
             supports_streaming=True,
@@ -72,6 +72,24 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             temperature_constraint=create_temperature_constraint("fixed"),
             description="Professional-grade reasoning (200K context) - EXTREMELY EXPENSIVE: Only for the most complex problems requiring universe-scale complexity analysis OR when the user explicitly asks for this model. Use sparingly for critical architectural decisions or exceptionally complex debugging that other models cannot handle.",
             aliases=["o3-pro"],
+        ),
+        "o3-deep-research-2025-06-26": ModelCapabilities(
+            provider=ProviderType.OPENAI,
+            model_name="o3-deep-research-2025-06-26",
+            friendly_name="OpenAI (O3-Deep-Research)",
+            context_window=200_000,  # 200K tokens
+            max_output_tokens=100_000,  # 100K max output tokens
+            supports_extended_thinking=False,
+            supports_system_prompts=True,
+            supports_streaming=True,
+            supports_function_calling=True,
+            supports_json_mode=True,
+            supports_images=True,  # O3 models support vision
+            max_image_size_mb=20.0,  # 20MB per OpenAI docs
+            supports_temperature=False,  # O3 models don't accept temperature parameter
+            temperature_constraint=create_temperature_constraint("fixed"),
+            description="Deep research model (200K context) - Specialized for comprehensive analysis, literature review, and complex research tasks",
+            aliases=["o3-deep-research", "deep-research", "research", "o3-research"],
         ),
         "o4-mini": ModelCapabilities(
             provider=ProviderType.OPENAI,

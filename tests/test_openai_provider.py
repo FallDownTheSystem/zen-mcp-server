@@ -46,6 +46,7 @@ class TestOpenAIProvider:
         assert provider.validate_model_name("o3") is True
         assert provider.validate_model_name("o3-mini") is True
         assert provider.validate_model_name("o3-pro") is True
+        assert provider.validate_model_name("o3-deep-research") is True
         assert provider.validate_model_name("o4-mini") is True
         assert provider.validate_model_name("o4-mini") is True
 
@@ -54,6 +55,9 @@ class TestOpenAIProvider:
         assert provider.validate_model_name("o3mini") is True
         assert provider.validate_model_name("o4mini") is True
         assert provider.validate_model_name("o4mini") is True
+        assert provider.validate_model_name("deep-research") is True
+        assert provider.validate_model_name("research") is True
+        assert provider.validate_model_name("o3-research") is True
 
         # Test invalid model
         assert provider.validate_model_name("invalid-model") is False
@@ -74,8 +78,14 @@ class TestOpenAIProvider:
         assert provider._resolve_model_name("o3") == "o3"
         assert provider._resolve_model_name("o3-mini") == "o3-mini"
         assert provider._resolve_model_name("o3-pro") == "o3-pro-2025-06-10"
+        assert provider._resolve_model_name("o3-deep-research") == "o3-deep-research-2025-06-26"
         assert provider._resolve_model_name("o4-mini") == "o4-mini"
         assert provider._resolve_model_name("o4-mini") == "o4-mini"
+
+        # Test deep-research aliases
+        assert provider._resolve_model_name("deep-research") == "o3-deep-research-2025-06-26"
+        assert provider._resolve_model_name("research") == "o3-deep-research-2025-06-26"
+        assert provider._resolve_model_name("o3-research") == "o3-deep-research-2025-06-26"
 
     def test_get_capabilities_o3(self):
         """Test getting model capabilities for O3."""
@@ -259,6 +269,51 @@ class TestOpenAIProvider:
         # Verify the response
         assert result.content == "4"
         assert result.model_name == "o3-pro-2025-06-10"
+        assert result.metadata["endpoint"] == "responses"
+
+    @patch("providers.openai_compatible.OpenAI")
+    def test_o3_deep_research_routes_to_responses_endpoint(self, mock_openai_class):
+        """Test that o3-deep-research model routes to the /v1/responses endpoint (mock test)."""
+        # Set up mock for OpenAI client responses endpoint
+        mock_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+
+        mock_response = MagicMock()
+        # Create proper nested structure for o3-deep-research response
+        mock_output = MagicMock()
+        mock_output.type = "message"
+        mock_content_item = MagicMock()
+        mock_content_item.type = "output_text"
+        mock_content_item.text = "Research results"
+        mock_output.content = [mock_content_item]
+        mock_response.output = [mock_output]
+
+        mock_response.model = "o3-deep-research-2025-06-26"
+        mock_response.id = "test-id"
+        mock_response.created_at = 1234567890
+        mock_response.usage = None
+        mock_response.input_tokens = 10
+        mock_response.output_tokens = 5
+
+        mock_client.responses.create.return_value = mock_response
+
+        provider = OpenAIModelProvider("test-key")
+
+        # Generate content with o3-deep-research using alias
+        result = provider.generate_content(
+            prompt="Research quantum computing", model_name="deep-research", temperature=1.0
+        )
+
+        # Verify responses.create was called
+        mock_client.responses.create.assert_called_once()
+        call_args = mock_client.responses.create.call_args[1]
+        assert call_args["model"] == "o3-deep-research-2025-06-26"
+        assert call_args["input"] == "Research quantum computing"
+        assert call_args["reasoning"] == {"effort": "high"}
+
+        # Verify the response
+        assert result.content == "Research results"
+        assert result.model_name == "o3-deep-research-2025-06-26"
         assert result.metadata["endpoint"] == "responses"
 
     @patch("providers.openai_compatible.OpenAI")

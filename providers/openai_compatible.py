@@ -266,12 +266,12 @@ class OpenAICompatibleProvider(ModelProvider):
 
     def _safe_extract_output_text(self, response) -> str:
         """Safely extract output text from o3-pro response with validation.
-        
+
         The o3-pro response has an output array containing ResponseOutputMessage items
         with ResponseOutputText content.
         """
         content = ""
-        
+
         # Check if response has output array (actual o3-pro format)
         if hasattr(response, "output") and response.output:
             # Iterate through output items
@@ -289,15 +289,15 @@ class OpenAICompatibleProvider(ModelProvider):
                                     break
                 if content:
                     break
-        
+
         # Fallback: check for direct output_text field
         if not content and hasattr(response, "output_text") and response.output_text:
             content = response.output_text
             logging.debug(f"Extracted output_text directly: {len(content)} chars")
-        
+
         if not content:
             logging.warning("No output text found in response")
-            
+
         return content
 
     def _generate_with_responses_endpoint(
@@ -309,21 +309,21 @@ class OpenAICompatibleProvider(ModelProvider):
         **kwargs,
     ) -> ModelResponse:
         """Generate content using the /v1/responses endpoint for o3-pro via OpenAI library.
-        
+
         Note: o3-pro can take several minutes to process complex requests, so we need
         to ensure the client has appropriate timeout settings.
         """
         # Convert messages to simple format for o3-pro responses endpoint
         # The responses API expects a simple input string, not a messages array
-        
+
         # Extract system message as instructions if present
         instructions = None
         input_text = ""
-        
+
         for message in messages:
             role = message.get("role", "")
             content = message.get("content", "")
-            
+
             if role == "system" and not instructions:
                 # Use first system message as instructions
                 instructions = content
@@ -336,7 +336,7 @@ class OpenAICompatibleProvider(ModelProvider):
                 # Include assistant context if present
                 if input_text:
                     input_text += f"\nAssistant: {content}\nUser: "
-        
+
         # Prepare completion parameters for responses endpoint
         # Based on OpenAI documentation examples
         completion_params = {
@@ -344,7 +344,7 @@ class OpenAICompatibleProvider(ModelProvider):
             "input": input_text.strip(),
             "reasoning": {"effort": "high"},  # Use high effort for o3-pro
         }
-        
+
         # Add instructions if we have them
         if instructions:
             completion_params["instructions"] = instructions
@@ -372,13 +372,13 @@ class OpenAICompatibleProvider(ModelProvider):
 
                 # Use OpenAI client's responses endpoint
                 response = self.client.responses.create(**completion_params)
-                
+
                 # Log the raw response for debugging
                 logging.info(f"o3-pro raw response type: {type(response)}")
                 logging.info(f"o3-pro raw response: {response}")
-                
+
                 # Log response attributes
-                if hasattr(response, '__dict__'):
+                if hasattr(response, "__dict__"):
                     logging.info(f"o3-pro response attributes: {list(response.__dict__.keys())}")
 
                 # Extract content and usage from responses endpoint format
@@ -531,9 +531,9 @@ class OpenAICompatibleProvider(ModelProvider):
                     continue  # Skip unsupported parameters for reasoning models
                 completion_params[key] = value
 
-        # Check if this is o3-pro and needs the responses endpoint
-        if resolved_model == "o3-pro-2025-06-10":
-            # This model requires the /v1/responses endpoint
+        # Check if this is o3-pro or o3-deep-research and needs the responses endpoint
+        if resolved_model in ["o3-pro-2025-06-10", "o3-deep-research-2025-06-26"]:
+            # These models require the /v1/responses endpoint
             # If it fails, we should not fall back to chat/completions
             return self._generate_with_responses_endpoint(
                 model_name=resolved_model,
