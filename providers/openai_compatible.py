@@ -264,6 +264,36 @@ class OpenAICompatibleProvider(ModelProvider):
 
         return self._client
 
+    def _safe_extract_output_text(self, response) -> str:
+        """Safely extract output text from o3-pro response with validation.
+        
+        o3-pro provides output_text directly on the response object,
+        not nested inside a content array.
+        """
+        content = ""
+        
+        # First check for direct output_text field (o3-pro format)
+        if hasattr(response, "output_text") and response.output_text:
+            content = response.output_text
+            logging.debug(f"Extracted output_text directly: {len(content)} chars")
+        # Then check nested structures for compatibility
+        elif hasattr(response, "output") and response.output:
+            if hasattr(response.output, "content") and response.output.content:
+                # Look for output_text in content array
+                for content_item in response.output.content:
+                    if hasattr(content_item, "type") and content_item.type == "output_text":
+                        content = content_item.text
+                        logging.debug(f"Extracted from content array: {len(content)} chars")
+                        break
+            elif hasattr(response.output, "text"):
+                content = response.output.text
+                logging.debug(f"Extracted from output.text: {len(content)} chars")
+        
+        if not content:
+            logging.warning("No output text found in response")
+            
+        return content
+
     def _generate_with_responses_endpoint(
         self,
         model_name: str,
@@ -323,16 +353,7 @@ class OpenAICompatibleProvider(ModelProvider):
 
                 # Extract content and usage from responses endpoint format
                 # The response format is different for responses endpoint
-                content = ""
-                if hasattr(response, "output") and response.output:
-                    if hasattr(response.output, "content") and response.output.content:
-                        # Look for output_text in content
-                        for content_item in response.output.content:
-                            if hasattr(content_item, "type") and content_item.type == "output_text":
-                                content = content_item.text
-                                break
-                    elif hasattr(response.output, "text"):
-                        content = response.output.text
+                content = self._safe_extract_output_text(response)
 
                 # Try to extract usage information
                 usage = None

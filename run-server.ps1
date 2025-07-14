@@ -335,6 +335,52 @@ function Test-ApiKeys {
     return $true
 }
 
+# Check API keys (warns but doesn't exit)
+function Check-ApiKeys {
+    Write-Step "Checking API Keys"
+    
+    if (!(Test-Path ".env")) {
+        Write-Warning "No .env file found. API keys should be configured."
+        Write-Info ""
+        Write-Info "The Python development environment will be set up, but you won't be able to use the MCP server until you add API keys."
+        Write-Info ""
+        Write-Info "You can continue with development setup and add API keys later."
+        Write-Info ""
+        return
+    }
+    
+    $envContent = Get-Content ".env"
+    $hasValidKey = $false
+    
+    $keyPatterns = @{
+        "GEMINI_API_KEY" = "AIza[0-9A-Za-z-_]{35}"
+        "OPENAI_API_KEY" = "sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20}"
+        "XAI_API_KEY" = "xai-[a-zA-Z0-9-_]+"
+        "OPENROUTER_API_KEY" = "sk-or-[a-zA-Z0-9-_]+"
+    }
+    
+    foreach ($line in $envContent) {
+        if ($line -match '^([^#][^=]*?)=(.*)$') {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim() -replace '^["'']|["'']$', ''
+            
+            if ($keyPatterns.ContainsKey($key) -and $value -ne "your_${key.ToLower()}_here" -and $value.Length -gt 10) {
+                Write-Success "Found valid $key"
+                $hasValidKey = $true
+            }
+        }
+    }
+    
+    if (!$hasValidKey) {
+        Write-Warning "No valid API keys found in .env file"
+        Write-Info ""
+        Write-Info "The Python development environment will be set up, but you won't be able to use the MCP server until you add API keys."
+        Write-Info ""
+        Write-Info "You can continue with development setup and add API keys later."
+        Write-Info ""
+    }
+}
+
 # Check if uv is available
 function Test-Uv {
     return Test-Command "uv"
@@ -1061,8 +1107,8 @@ function Start-MainProcess {
     # Step 3: Load .env file
     Import-EnvFile
     
-    # Step 4: Validate API keys
-    Test-ApiKeys
+    # Step 4: Check API keys (warns but doesn't exit)
+    Check-ApiKeys
     
     # Step 5: Setup Python environment
     try {
