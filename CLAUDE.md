@@ -17,11 +17,13 @@ source venv/bin/activate
 ```
 
 This script automatically runs:
-- Ruff linting with auto-fix
-- Black code formatting 
-- Import sorting with isort
+- Ruff linting with auto-fix (excludes .zen_venv and test_simulation_files)
+- Black code formatting (excludes .zen_venv and test_simulation_files)
+- Import sorting with isort (excludes .zen_venv and test_simulation_files)
 - Complete unit test suite (excluding integration tests)
 - Verification that all checks pass 100%
+
+**IMPORTANT:** The virtual environment (.zen_venv) is excluded from all formatting operations to prevent modifying dependencies.
 
 **Run Integration Tests (requires API keys):**
 ```bash
@@ -88,9 +90,26 @@ tail -f logs/mcp_activity.log | grep -E "(TOOL_CALL|TOOL_COMPLETED|ERROR|WARNING
 
 ### Testing
 
+#### IMPORTANT: Activate Virtual Environment First
+Before running ANY tests, you MUST activate the virtual environment:
+
+**On Windows (Git Bash/WSL):**
+```bash
+# From the project root directory
+source .zen_venv/Scripts/activate
+```
+
+**On macOS/Linux:**
+```bash
+# From the project root directory
+source .zen_venv/bin/activate
+```
+
+If the virtual environment is not activated, tests will fail with import errors!
+
 #### Run All Simulator Tests
 ```bash
-# Run the complete test suite
+# After activating venv, run the complete test suite
 python communication_simulator_test.py
 
 # Run tests with verbose output
@@ -128,20 +147,63 @@ python communication_simulator_test.py --individual consensus_workflow_accurate 
 
 #### Run Unit Tests Only
 ```bash
+# ALWAYS activate venv first!
+source .zen_venv/Scripts/activate  # Windows Git Bash
+# OR
+source .zen_venv/bin/activate      # macOS/Linux
+
 # Run all unit tests (excluding integration tests that require API keys)
 python -m pytest tests/ -v -m "not integration"
 
 # Run specific test file
 python -m pytest tests/test_chat_simple.py -v
 
+# Run specific test class
+python -m pytest tests/test_openai_provider.py::TestOpenAIProvider -v
+
+# Run specific test method
+python -m pytest tests/test_openai_provider.py::TestOpenAIProvider::test_model_validation -v
+
+# Run multiple specific tests
+python -m pytest tests/test_openai_provider.py tests/test_o3_pro_response.py -v -m "not integration"
+
 # Run tests with coverage
 python -m pytest tests/ --cov=. --cov-report=html -m "not integration"
+
+# Run tests matching a pattern
+python -m pytest tests/ -k "o3_deep_research" -v
+
+# Stop at first failure (useful for debugging)
+python -m pytest tests/ -v -x -m "not integration"
+```
+
+#### Common Test Issues and Solutions
+
+**Issue: Import errors or module not found**
+```bash
+# Solution: Activate virtual environment
+source .zen_venv/Scripts/activate  # Windows
+source .zen_venv/bin/activate      # macOS/Linux
+```
+
+**Issue: Tests hanging or timing out**
+```bash
+# Solution: Exclude integration tests that make real API calls
+python -m pytest tests/ -v -m "not integration"
+```
+
+**Issue: Specific test failing on Windows due to path issues**
+```bash
+# Solution: Run tests excluding problematic ones
+python -m pytest tests/ -v -m "not integration" -k "not test_detect_home_patterns_linux"
 ```
 
 ### Development Workflow
 
 #### Before Making Changes
-1. Ensure virtual environment is activated: `source .zen_venv/bin/activate`
+1. Ensure virtual environment is activated: 
+   - Windows: `source .zen_venv/Scripts/activate`
+   - macOS/Linux: `source .zen_venv/bin/activate`
 2. Run quality checks: `./code_quality_checks.sh`
 3. Check logs to ensure server is healthy: `tail -n 50 logs/mcp_server.log`
 
