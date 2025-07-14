@@ -307,30 +307,40 @@ class OpenAICompatibleProvider(ModelProvider):
         Note: o3-pro can take several minutes to process complex requests, so we need
         to ensure the client has appropriate timeout settings.
         """
-        # Convert messages to the correct format for responses endpoint
-        input_messages = []
-
+        # Convert messages to simple format for o3-pro responses endpoint
+        # The responses API expects a simple input string, not a messages array
+        
+        # Extract system message as instructions if present
+        instructions = None
+        input_text = ""
+        
         for message in messages:
             role = message.get("role", "")
             content = message.get("content", "")
-
-            if role == "system":
-                # For o3-pro, system messages should be handled carefully to avoid policy violations
-                # Instead of prefixing with "System:", we'll include the system content naturally
-                input_messages.append({"role": "user", "content": [{"type": "input_text", "text": content}]})
+            
+            if role == "system" and not instructions:
+                # Use first system message as instructions
+                instructions = content
             elif role == "user":
-                input_messages.append({"role": "user", "content": [{"type": "input_text", "text": content}]})
+                # Concatenate user messages as input
+                if input_text:
+                    input_text += "\n"
+                input_text += content
             elif role == "assistant":
-                input_messages.append({"role": "assistant", "content": [{"type": "output_text", "text": content}]})
-
+                # Include assistant context if present
+                if input_text:
+                    input_text += f"\nAssistant: {content}\nUser: "
+        
         # Prepare completion parameters for responses endpoint
-        # Based on OpenAI documentation, use nested reasoning object for responses endpoint
+        # Based on OpenAI documentation examples
         completion_params = {
             "model": model_name,
-            "input": input_messages,
-            "reasoning": {"effort": "medium"},  # Use nested object for responses endpoint
-            "store": True,
+            "input": input_text.strip(),
         }
+        
+        # Add instructions if we have them
+        if instructions:
+            completion_params["instructions"] = instructions
 
         # Add max tokens if specified (using max_completion_tokens for responses endpoint)
         if max_output_tokens:
