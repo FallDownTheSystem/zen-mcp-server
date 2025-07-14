@@ -398,4 +398,51 @@ The project follows **Semantic Versioning** (MAJOR.MINOR.PATCH):
 - **6.0.0**: First version of the simplified fork (major version bump due to breaking changes)
 - **Current**: Version is maintained in `config.py` as the single source of truth
 
+### Troubleshooting Development Issues
+
+#### Virtual Environment Issues
+
+**Problem: "No virtual environment found!" when running scripts**
+```bash
+# Solution: Create/activate the virtual environment
+./run-server.sh  # This creates .zen_venv if it doesn't exist
+source .zen_venv/Scripts/activate  # Windows
+source .zen_venv/bin/activate      # macOS/Linux
+```
+
+**Problem: Import errors when running tests**
+```bash
+# Solution: Always activate venv before running any Python commands
+source .zen_venv/Scripts/activate  # Windows
+python -m pytest tests/ -v
+```
+
+#### Code Quality Check Issues
+
+**Problem: Black/ruff reformatting files in .zen_venv**
+```bash
+# This has been fixed in the latest version of code_quality_checks.sh
+# If you still see this issue, manually update the script to exclude .zen_venv
+```
+
+**Problem: Tests failing due to linting issues**
+```bash
+# Run the quality checks with auto-fix before testing
+./code_quality_checks.sh
+```
+
+#### Platform-Specific Issues
+
+**Problem: Tests failing on Windows due to Linux path tests**
+```bash
+# Exclude problematic tests on Windows
+python -m pytest tests/ -v -m "not integration" -k "not test_detect_home_patterns_linux"
+```
+
+**Problem: Line ending issues on Windows**
+```bash
+# Configure git to handle line endings
+git config core.autocrlf true
+```
+
 This guide provides everything needed to efficiently work with the Simplified Zen MCP Server codebase using Claude.
