@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -193,6 +194,29 @@ class ConsensusTool(SimpleTool):
             bool: False
         """
         return False
+
+    def _get_consensus_timeout(self) -> float:
+        """Get the timeout for consensus model calls.
+        
+        Uses environment variable CONSENSUS_MODEL_TIMEOUT if set, otherwise defaults to 10 minutes.
+        This is separate from provider-level HTTP timeouts and specifically controls how long
+        to wait for each model in the consensus workflow.
+        
+        Returns:
+            float: Timeout in seconds
+        """
+        default_timeout = 600.0  # 10 minutes default
+        timeout_str = os.getenv("CONSENSUS_MODEL_TIMEOUT", str(default_timeout))
+
+        try:
+            timeout = float(timeout_str)
+            if timeout <= 0:
+                logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ({timeout}), using default of {default_timeout} seconds")
+                return default_timeout
+            return timeout
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ('{timeout_str}'), using default of {default_timeout} seconds")
+            return default_timeout
 
     async def execute(self, arguments: dict[str, Any]) -> list:
         """Execute parallel consensus with optional cross-model feedback."""
@@ -395,8 +419,9 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model with timing (use asyncio.to_thread for parallel execution)
+            # Call the model with timing and pass timeout to provider (use asyncio.to_thread for parallel execution)
             start_time = time.time()
+            consensus_timeout = self._get_consensus_timeout()
             response = await asyncio.to_thread(
                 provider.generate_content,
                 prompt=prompt,
@@ -405,7 +430,9 @@ class ConsensusTool(SimpleTool):
                 temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode="medium",
                 images=request.images if request.images else None,
+                timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )
+
             end_time = time.time()
             response_time = end_time - start_time
 
@@ -454,8 +481,9 @@ class ConsensusTool(SimpleTool):
             # Use the consensus system prompt
             system_prompt = self.get_system_prompt()
 
-            # Call the model with the feedback and timing (use asyncio.to_thread for parallel execution)
+            # Call the model with the feedback and timing, pass timeout to provider (use asyncio.to_thread for parallel execution)
             start_time = time.time()
+            consensus_timeout = self._get_consensus_timeout()
             response = await asyncio.to_thread(
                 provider.generate_content,
                 prompt=feedback_prompt,
@@ -464,7 +492,9 @@ class ConsensusTool(SimpleTool):
                 temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode="medium",
                 images=request.images if request.images else None,
+                timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )
+
             end_time = time.time()
             response_time = end_time - start_time
 

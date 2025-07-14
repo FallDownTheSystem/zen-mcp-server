@@ -418,22 +418,37 @@ class GeminiModelProvider(ModelProvider):
             return True
 
         # For non-429 errors, check if they're retryable
+        # Note: We exclude "timeout" and "408" from retries to prevent infinite retry loops
+        # on hanging requests. HTTP timeouts suggest the server is unresponsive and 
+        # retrying will likely hang again for the same duration.
         retryable_indicators = [
-            "timeout",
-            "connection",
-            "network",
-            "temporary",
-            "unavailable",
-            "retry",
-            "internal error",
-            "408",  # Request timeout
-            "500",  # Internal server error
-            "502",  # Bad gateway
-            "503",  # Service unavailable
-            "504",  # Gateway timeout
-            "ssl",  # SSL errors
-            "handshake",  # Handshake failures
+            "connection",  # Connection errors (network issues)
+            "network",     # Network errors
+            "temporary",   # Temporary failures
+            "unavailable", # Service temporarily unavailable
+            "retry",       # Explicit retry suggestions
+            "internal error",  # Internal errors
+            "500",         # Internal server error
+            "502",         # Bad gateway
+            "503",         # Service unavailable
+            "504",         # Gateway timeout (server-side timeout, different from read timeout)
+            "ssl",         # SSL errors
+            "handshake",   # Handshake failures
         ]
+
+        # Explicitly exclude HTTP read timeouts from retries
+        # These suggest the server is hanging and retrying will likely hang again
+        non_retryable_indicators = [
+            "read timeout",
+            "timeout error",
+            "408",  # Request timeout
+            "deadline exceeded",  # gRPC timeout
+            "timeout",  # Generic timeout
+        ]
+        
+        # Don't retry if it's a timeout-related error
+        if any(indicator in error_str for indicator in non_retryable_indicators):
+            return False
 
         return any(indicator in error_str for indicator in retryable_indicators)
 

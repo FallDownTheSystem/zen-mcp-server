@@ -337,6 +337,9 @@ class OpenAICompatibleProvider(ModelProvider):
                 if input_text:
                     input_text += f"\nAssistant: {content}\nUser: "
 
+        # Extract request-specific timeout from kwargs
+        request_timeout = kwargs.pop("timeout", None)
+        
         # Prepare completion parameters for responses endpoint
         # Based on OpenAI documentation examples
         completion_params = {
@@ -344,6 +347,10 @@ class OpenAICompatibleProvider(ModelProvider):
             "input": input_text.strip(),
             "reasoning": {"effort": "high"},  # Use high effort for o3-pro
         }
+        
+        # Add timeout if provided (for consensus and other tools that need faster failure)
+        if request_timeout:
+            completion_params["timeout"] = request_timeout
 
         # Add instructions if we have them
         if instructions:
@@ -500,11 +507,18 @@ class OpenAICompatibleProvider(ModelProvider):
             # Text + images, use content array format
             messages.append({"role": "user", "content": user_content})
 
+        # Extract request-specific timeout from kwargs
+        request_timeout = kwargs.pop("timeout", None)
+        
         # Prepare completion parameters
         completion_params = {
             "model": model_name,
             "messages": messages,
         }
+        
+        # Add timeout if provided (for consensus and other tools that need faster failure)
+        if request_timeout:
+            completion_params["timeout"] = request_timeout
 
         # Check model capabilities once to determine parameter support
         resolved_model = self._resolve_model_name(model_name)
@@ -818,21 +832,36 @@ class OpenAICompatibleProvider(ModelProvider):
                 return True
 
         # For non-429 errors, check if they're retryable
+        # Note: We exclude "timeout" and "408" from retries to prevent infinite retry loops
+        # on hanging requests. HTTP timeouts suggest the server is unresponsive and 
+        # retrying will likely hang again for the same duration.
         retryable_indicators = [
-            "timeout",
-            "connection",
-            "network",
-            "temporary",
-            "unavailable",
-            "retry",
-            "408",  # Request timeout
-            "500",  # Internal server error
-            "502",  # Bad gateway
-            "503",  # Service unavailable
-            "504",  # Gateway timeout
-            "ssl",  # SSL errors
-            "handshake",  # Handshake failures
+            "connection",  # Connection errors (network issues)
+            "network",     # Network errors
+            "temporary",   # Temporary failures
+            "unavailable", # Service temporarily unavailable
+            "retry",       # Explicit retry suggestions
+            "500",         # Internal server error
+            "502",         # Bad gateway
+            "503",         # Service unavailable
+            "504",         # Gateway timeout (server-side timeout, different from read timeout)
+            "ssl",         # SSL errors
+            "handshake",   # Handshake failures
         ]
+
+        # Explicitly exclude HTTP read timeouts from retries
+        # These suggest the server is hanging and retrying will likely hang again
+        non_retryable_indicators = [
+            "read timeout",
+            "timeout error", 
+            "408",  # Request timeout
+            "httpx.readtimeout",
+            "httpx.connecttimeout",
+        ]
+        
+        # Don't retry if it's a timeout-related error
+        if any(indicator in error_str for indicator in non_retryable_indicators):
+            return False
 
         return any(indicator in error_str for indicator in retryable_indicators)
 
