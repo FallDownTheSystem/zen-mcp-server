@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.0.1] - 2025-07-15
+
+### Fixed
+- **Dependencies**: Fixed missing `litellm>=1.74.3` dependency in `pyproject.toml`
+  - Required for `uvx` installation from git to work properly
+  - LiteLLM was present in `requirements.txt` but missing from `pyproject.toml`
+- **Code Quality**: Fixed linting issues in test files
+  - Removed unused variables in test files
+  - Improved code quality and fixed linting warnings
+
 ## [7.0.0] - 2025-07-15
 
 ### Changed
