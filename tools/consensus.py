@@ -381,6 +381,80 @@ class ConsensusTool(SimpleTool):
                 },
             }
 
+            # Handle continuation - store consensus result and create continuation offer
+            continuation_offer = None
+            if len(final_responses) > 0:  # Only offer continuation if we have successful responses
+                # Store the consensus result in conversation memory
+                from utils.conversation_memory import MAX_CONVERSATION_TURNS, add_turn, create_thread, get_thread
+
+                if request.continuation_id:
+                    # Continuing existing conversation
+                    thread_context = get_thread(request.continuation_id)
+                    if thread_context and thread_context.turns:
+                        turn_count = len(thread_context.turns)
+                        if turn_count < MAX_CONVERSATION_TURNS - 1:
+                            # Add consensus result as assistant turn
+                            add_turn(
+                                request.continuation_id,
+                                "assistant",
+                                self._format_consensus_for_storage(response_data),
+                                tool_name="consensus",
+                                model_provider="multi-model-consensus",
+                                model_name=f"{len(final_responses)} models",
+                                model_metadata={"consensus_data": response_data},
+                            )
+
+                            remaining_turns = MAX_CONVERSATION_TURNS - turn_count - 1
+                            continuation_offer = {
+                                "continuation_id": request.continuation_id,
+                                "remaining_turns": remaining_turns,
+                                "note": f"Claude can continue this conversation for {remaining_turns} more exchanges.",
+                            }
+                else:
+                    # New conversation - create thread
+                    # Convert request to dict for initial_context
+                    initial_request_dict = {
+                        "prompt": request.prompt,
+                        "models": request.models,
+                        "relevant_files": request.relevant_files,
+                        "enable_cross_feedback": request.enable_cross_feedback,
+                        "temperature": request.temperature,
+                        "reasoning_effort": request.reasoning_effort,
+                    }
+
+                    new_thread_id = create_thread(tool_name="consensus", initial_request=initial_request_dict)
+
+                    # Add user's initial turn
+                    add_turn(
+                        new_thread_id,
+                        "user",
+                        request.prompt,
+                        files=request.relevant_files,
+                        images=request.images,
+                        tool_name="consensus",
+                    )
+
+                    # Add consensus result as assistant turn
+                    add_turn(
+                        new_thread_id,
+                        "assistant",
+                        self._format_consensus_for_storage(response_data),
+                        tool_name="consensus",
+                        model_provider="multi-model-consensus",
+                        model_name=f"{len(final_responses)} models",
+                        model_metadata={"consensus_data": response_data},
+                    )
+
+                    continuation_offer = {
+                        "continuation_id": new_thread_id,
+                        "remaining_turns": MAX_CONVERSATION_TURNS - 1,
+                        "note": f"Claude can continue this conversation for {MAX_CONVERSATION_TURNS - 1} more exchanges.",
+                    }
+
+            # Add continuation offer to response if available
+            if continuation_offer:
+                response_data["continuation_offer"] = continuation_offer
+
             return [TextContent(type="text", text=json.dumps(response_data, indent=2, ensure_ascii=False))]
 
         except Exception as e:
@@ -406,6 +480,14 @@ class ConsensusTool(SimpleTool):
 
             # Prepare the prompt with any relevant files
             prompt = self.initial_prompt
+
+            # Add model-specific continuation history for initial phase only
+            if request.continuation_id and phase == "initial":
+                model_history = self._build_model_specific_history(model_name, request.continuation_id, request.models)
+
+                if model_history:
+                    prompt = f"{model_history}\n\nNEW QUESTION:\n{prompt}"
+
             if request.relevant_files:
                 file_content, _ = self._prepare_file_content_for_prompt(
                     request.relevant_files,
@@ -568,6 +650,54 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
 """
 
         return prompt
+
+    def _extract_previous_consensus(self, continuation_id: str) -> dict[str, str]:
+        """Extract model responses from previous consensus turns in the conversation."""
+        from utils.conversation_memory import get_thread
+
+        thread = get_thread(continuation_id)
+        if not thread:
+            return {}
+
+        consensus_responses = {}
+
+        # Walk through turns to find consensus responses
+        for turn in thread.turns:
+            if turn.tool_name == "consensus" and turn.role == "assistant":
+                # Check if we have consensus data in metadata
+                if turn.model_metadata and "consensus_data" in turn.model_metadata:
+                    consensus_data = turn.model_metadata["consensus_data"]
+                    if isinstance(consensus_data, dict) and "responses" in consensus_data:
+                        for response in consensus_data["responses"]:
+                            model = response.get("model")
+                            content = response.get("response")
+                            if model and content and response.get("status") == "success":
+                                consensus_responses[model] = content
+
+        return consensus_responses
+
+    def _build_model_specific_history(self, current_model: str, continuation_id: str, all_current_models: list) -> str:
+        """Build conversation history specific to each model based on continuation context."""
+        # Get previous consensus responses
+        previous_consensus = self._extract_previous_consensus(continuation_id)
+        if not previous_consensus:
+            return ""
+
+        # Case 1: If this model participated before, show only its own response
+        if current_model in previous_consensus:
+            return f"=== YOUR PREVIOUS RESPONSE ===\n\n{previous_consensus[current_model]}\n"
+
+        # Case 2: New model - show all previous responses with attribution
+        history = "=== PREVIOUS MODEL RESPONSES ===\n"
+        for model, response in previous_consensus.items():
+            history += f"\n--- {model}'s response ---\n{response}\n"
+
+        return history
+
+    def _format_consensus_for_storage(self, response_data: dict) -> str:
+        """Format consensus results for conversation storage - store complete JSON."""
+        # Store the entire response data as JSON to preserve full fidelity
+        return json.dumps(response_data, indent=2, ensure_ascii=False)
 
     # Required abstract methods from SimpleTool
     def get_tool_fields(self) -> dict[str, dict[str, Any]]:
