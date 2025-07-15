@@ -240,8 +240,16 @@ class ConsensusTool(SimpleTool):
             # Phase 1: Parallel initial model consultations
             logger.info(f"Starting parallel consensus for {len(self.models_to_consult)} models")
 
+            # Get timeout for consensus operations
+            consensus_timeout = self._get_consensus_timeout()
+            
+            # Wrap each model consultation in a timeout
             initial_tasks = [
-                self._consult_model(model_config, request, phase="initial") for model_config in self.models_to_consult
+                asyncio.wait_for(
+                    self._consult_model(model_config, request, phase="initial"),
+                    timeout=consensus_timeout + 5  # Add 5 seconds buffer for the asyncio timeout
+                )
+                for model_config in self.models_to_consult
             ]
 
             # Execute all initial consultations in parallel
@@ -287,8 +295,11 @@ class ConsensusTool(SimpleTool):
 
                         if model_config and other_responses:
                             refinement_tasks.append(
-                                self._consult_model_with_feedback(
-                                    model_config, request, response, other_responses, phase="refinement"
+                                asyncio.wait_for(
+                                    self._consult_model_with_feedback(
+                                        model_config, request, response, other_responses, phase="refinement"
+                                    ),
+                                    timeout=consensus_timeout + 5  # Same timeout as initial phase
                                 )
                             )
 

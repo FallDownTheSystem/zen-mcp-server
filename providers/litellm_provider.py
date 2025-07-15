@@ -445,6 +445,11 @@ class LiteLLMProvider(ModelProvider):
             for key, value in kwargs.items():
                 if value is not None:
                     completion_kwargs[key] = value
+            
+            # Add additional_drop_params for XAI models to handle reasoning_effort
+            if "xai/" in resolved_model.lower() or "grok" in resolved_model.lower():
+                completion_kwargs["additional_drop_params"] = ["reasoning_effort"]
+                logger.debug(f"Added additional_drop_params for XAI model {resolved_model}")
 
             # Call LiteLLM
             response = completion(**completion_kwargs)

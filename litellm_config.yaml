@@ -74,7 +74,7 @@ model_list:
       temperature: 0.5
       max_tokens: 8192
       timeout: 600
-    model_alias: ["pro", "gemini pro", "gemini-pro"]
+    model_alias: ["pro", "gemini pro", "gemini-pro", "gemini"]
 
   - model_name: "gemini-2.0-flash"
     litellm_params:
