@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.0.3] - 2025-07-15
+
+### Fixed
+- **Model Discovery**: Enhanced YAML file discovery for `uvx` installations
+  - Added support for multiple package name variations (`zen-mcp-server`, `zen_mcp_server`)
+  - Improved debug logging for file discovery process
+  - Fixed auto mode failing due to missing model metadata files in installed packages
+  - Added more robust fallback mechanisms for finding configuration files
+
 ## [7.0.2] - 2025-07-15
 
 ### Fixed

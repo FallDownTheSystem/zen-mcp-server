@@ -40,6 +40,101 @@ class LiteLLMProvider(ModelProvider):
 
     FRIENDLY_NAME = "LiteLLM"
 
+    def _find_yaml_file(self, filename: str) -> Optional[str]:
+        """Find a YAML file using multiple fallback approaches.
+
+        This method tries different approaches to find YAML files:
+        1. Using importlib.resources (modern approach for installed packages)
+        2. Using relative paths (for development)
+        3. Using package data approaches
+
+        Args:
+            filename: Name of the YAML file to find
+
+        Returns:
+            Path to the file if found, None otherwise
+        """
+        from pathlib import Path
+
+        logger.debug(f"Looking for YAML file: {filename}")
+
+        # Approach 1: Try importlib.resources (Python 3.9+)
+        try:
+            if hasattr(__import__("importlib"), "resources"):
+                import importlib.resources as resources
+
+                # Try different package name variations
+                package_names = ["zen-mcp-server", "zen_mcp_server", "zen-mcp-server-0.1.0"]
+                for pkg_name in package_names:
+                    try:
+                        logger.debug(f"Trying importlib.resources with package: {pkg_name}")
+                        ref = resources.files(pkg_name) / filename
+                        if ref.is_file():
+                            logger.debug(f"Found {filename} using importlib.resources with package {pkg_name}")
+                            return str(ref)
+                    except Exception as e:
+                        logger.debug(f"Failed to find {filename} with package {pkg_name}: {e}")
+                        continue
+
+                try:
+                    # Try to find the file in the current package
+                    ref = resources.files(__package__.split(".")[0]) / filename
+                    if ref.is_file():
+                        return str(ref)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Approach 2: Try pkg_resources (legacy approach) - only if importlib.resources fails
+        try:
+            import pkg_resources
+
+            # Try different package name variations
+            package_names = ["zen-mcp-server", "zen_mcp_server", "zen-mcp-server-0.1.0"]
+            for pkg_name in package_names:
+                try:
+                    filepath = pkg_resources.resource_filename(pkg_name, filename)
+                    if Path(filepath).exists():
+                        return filepath
+                except Exception:
+                    continue
+        except (ImportError, UserWarning):
+            # pkg_resources is deprecated, but we'll keep it as a fallback
+            pass
+
+        # Approach 3: Try relative paths (for development)
+        try:
+            # Current approach - relative to this file
+            relative_path = Path(__file__).parent.parent / filename
+            if relative_path.exists():
+                return str(relative_path)
+        except Exception:
+            pass
+
+        # Approach 4: Try current working directory
+        try:
+            cwd_path = Path.cwd() / filename
+            if cwd_path.exists():
+                return str(cwd_path)
+        except Exception:
+            pass
+
+        # Approach 5: Try common installation locations
+        try:
+            import sys
+
+            for path in sys.path:
+                if path:
+                    potential_path = Path(path) / filename
+                    if potential_path.exists():
+                        return str(potential_path)
+        except Exception:
+            pass
+
+        logger.warning(f"Could not find {filename} in any of the expected locations")
+        return None
+
     def __init__(self, **kwargs):
         """Initialize the LiteLLM provider.
 
@@ -50,18 +145,35 @@ class LiteLLMProvider(ModelProvider):
         super().__init__(api_key="", **kwargs)
 
         # Load LiteLLM config if available
-        from pathlib import Path
-
-        config_path = Path(__file__).parent.parent / "litellm_config.yaml"
-        if config_path.exists():
+        config_path = self._find_yaml_file("litellm_config.yaml")
+        if config_path:
             os.environ["LITELLM_CONFIG_PATH"] = str(config_path)
             logger.info(f"Set LITELLM_CONFIG_PATH to {config_path}")
+        else:
+            logger.warning("litellm_config.yaml not found, LiteLLM will use default configuration")
 
         # Enable drop_params globally to handle model-specific restrictions
         litellm.drop_params = True
 
-        # Get model metadata (if provided)
+        # Get model metadata (if provided, or load from file)
         self.model_metadata = kwargs.get("model_metadata", {})
+
+        # If no model metadata provided, try to load it from the YAML file
+        if not self.model_metadata:
+            metadata_path = self._find_yaml_file("model_metadata.yaml")
+            if metadata_path:
+                try:
+                    import yaml
+
+                    with open(metadata_path) as f:
+                        metadata = yaml.safe_load(f)
+                        if metadata and "models" in metadata:
+                            self.model_metadata = metadata["models"]
+                            logger.debug(f"Loaded model metadata for {len(self.model_metadata)} models")
+                except Exception as e:
+                    logger.warning(f"Failed to load model metadata from {metadata_path}: {e}")
+            else:
+                logger.warning("model_metadata.yaml not found, model capabilities will use defaults")
 
         # Configure observability callbacks
         self._configure_observability()
@@ -432,8 +544,6 @@ class LiteLLMProvider(ModelProvider):
         Returns:
             List of model names available through LiteLLM
         """
-        from pathlib import Path
-
         import yaml
 
         from utils.model_restrictions import get_restriction_service
@@ -441,20 +551,22 @@ class LiteLLMProvider(ModelProvider):
         models = []
 
         # Load model metadata to get list of available models
-        metadata_path = Path(__file__).parent.parent / "model_metadata.yaml"
-        if metadata_path.exists():
+        metadata_path = self._find_yaml_file("model_metadata.yaml")
+        if metadata_path:
             try:
                 with open(metadata_path) as f:
                     metadata = yaml.safe_load(f)
                     if metadata and "models" in metadata:
                         models = list(metadata["models"].keys())
+                        logger.debug(f"Loaded {len(models)} models from model_metadata.yaml")
             except Exception as e:
-                logger.warning(f"Failed to load model metadata: {e}")
-                # Fall back to a default list
+                logger.warning(f"Failed to load model metadata from {metadata_path}: {e}")
+        else:
+            logger.warning("model_metadata.yaml not found, falling back to default model list")
 
         # Also load aliases from litellm_config.yaml
-        config_path = Path(__file__).parent.parent / "litellm_config.yaml"
-        if config_path.exists():
+        config_path = self._find_yaml_file("litellm_config.yaml")
+        if config_path:
             try:
                 with open(config_path) as f:
                     config = yaml.safe_load(f)
@@ -473,23 +585,30 @@ class LiteLLMProvider(ModelProvider):
                                         models.append(alias)
                             elif isinstance(aliases, str) and aliases not in models:
                                 models.append(aliases)
+                        logger.debug(f"Loaded additional models/aliases from litellm_config.yaml, total: {len(models)}")
             except Exception as e:
-                logger.warning(f"Failed to load litellm config: {e}")
-                models = [
-                    "o3",
-                    "o3-mini",
-                    "o3-pro",
-                    "o3-deep-research",
-                    "o4-mini",
-                    "gpt-4.1-2025-04-14",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-pro",
-                    "gemini-2.0-flash",
-                    "gemini-2.0-flash-lite",
-                    "grok-3",
-                    "grok-3-fast",
-                    "grok-4-0709",
-                ]
+                logger.warning(f"Failed to load litellm config from {config_path}: {e}")
+        else:
+            logger.warning("litellm_config.yaml not found, using model_metadata.yaml only")
+
+        # If no models were loaded, fall back to a default list
+        if not models:
+            logger.warning("No models loaded from YAML files, using fallback list")
+            models = [
+                "o3",
+                "o3-mini",
+                "o3-pro",
+                "o3-deep-research",
+                "o4-mini",
+                "gpt-4.1-2025-04-14",
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "grok-3",
+                "grok-3-fast",
+                "grok-4-0709",
+            ]
 
         # Apply restrictions if requested
         if respect_restrictions:
@@ -499,6 +618,7 @@ class LiteLLMProvider(ModelProvider):
                 if restriction_service.is_allowed(self.get_provider_type(), model):
                     filtered_models.append(model)
             models = filtered_models
+            logger.debug(f"After applying restrictions: {len(models)} models available")
 
         return models
 
