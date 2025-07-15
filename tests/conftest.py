@@ -42,14 +42,14 @@ if sys.platform == "win32":
 # Register providers for all tests
 from providers import ModelProviderRegistry  # noqa: E402
 from providers.base import ProviderType  # noqa: E402
-from providers.gemini import GeminiModelProvider  # noqa: E402
-from providers.openai_provider import OpenAIModelProvider  # noqa: E402
-from providers.xai import XAIModelProvider  # noqa: E402
 
-# Register providers at test startup
-ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
+# For backward compatibility, still import legacy providers but don't register them by default
+# Import LiteLLM provider for unified model handling
+from providers.litellm_provider import LiteLLMProvider  # noqa: E402
+
+# Register LiteLLM as the primary provider for all models
+# This matches the server.py configuration
+ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
 # Register CUSTOM provider if CUSTOM_API_URL is available (for integration tests)
 # But only if we're actually running integration tests, not unit tests
@@ -99,17 +99,14 @@ def mock_provider_availability(request, monkeypatch):
         if marker:
             return
 
-    # Ensure providers are registered (in case other tests cleared the registry)
+    # Ensure LiteLLM provider is registered (in case other tests cleared the registry)
     from providers.base import ProviderType
 
     registry = ModelProviderRegistry()
 
-    if ProviderType.GOOGLE not in registry._providers:
-        ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-    if ProviderType.OPENAI not in registry._providers:
-        ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-    if ProviderType.XAI not in registry._providers:
-        ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
+    # Only register LiteLLM provider if not already registered
+    if ProviderType.CUSTOM not in registry._providers:
+        ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
     # Ensure CUSTOM provider is registered if needed for integration tests
     if (

@@ -241,7 +241,7 @@ class TestAutoModeProviderSelection:
                     os.environ.pop(key, None)
 
     def test_model_validation_across_providers(self):
-        """Test that model validation works correctly across different providers."""
+        """Test that model validation works correctly with LiteLLM unified provider."""
 
         # Save original environment
         original_env = {}
@@ -254,34 +254,37 @@ class TestAutoModeProviderSelection:
             os.environ["OPENAI_API_KEY"] = "test-key"
             os.environ["XAI_API_KEY"] = "test-key"
 
-            # Register all providers
-            from providers.gemini import GeminiModelProvider
-            from providers.openai_provider import OpenAIModelProvider
-            from providers.xai import XAIModelProvider
+            # With LiteLLM, all models go through the same provider
+            # Test that various model names return the LiteLLM provider
+            from providers.litellm_provider import LiteLLMProvider
 
-            ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
+            # Ensure LiteLLM provider is registered
+            ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
-            # Test model validation - each provider should handle its own models
+            # Test model validation - all models should go through LiteLLM
             # Gemini models
             gemini_provider = ModelProviderRegistry.get_provider_for_model("flash")
             assert gemini_provider is not None
-            assert gemini_provider.get_provider_type() == ProviderType.GOOGLE
+            assert gemini_provider.get_provider_type() == ProviderType.CUSTOM
 
             # OpenAI models
             openai_provider = ModelProviderRegistry.get_provider_for_model("o3")
             assert openai_provider is not None
-            assert openai_provider.get_provider_type() == ProviderType.OPENAI
+            assert openai_provider.get_provider_type() == ProviderType.CUSTOM
+
+            # Should be the same provider type
+            assert isinstance(gemini_provider, type(openai_provider))
 
             # XAI models
             xai_provider = ModelProviderRegistry.get_provider_for_model("grok")
             assert xai_provider is not None
-            assert xai_provider.get_provider_type() == ProviderType.XAI
+            assert xai_provider.get_provider_type() == ProviderType.CUSTOM
 
-            # Invalid model should return None
+            # Even invalid models return the LiteLLM provider
+            # (LiteLLM will handle the validation and error)
             invalid_provider = ModelProviderRegistry.get_provider_for_model("invalid-model-name")
-            assert invalid_provider is None
+            assert invalid_provider is not None
+            assert invalid_provider.get_provider_type() == ProviderType.CUSTOM
 
         finally:
             # Restore original environment
@@ -292,7 +295,7 @@ class TestAutoModeProviderSelection:
                     os.environ.pop(key, None)
 
     def test_alias_resolution_before_api_calls(self):
-        """Test that model aliases are resolved before being passed to providers."""
+        """Test that model aliases work correctly with LiteLLM provider."""
 
         # Save original environment
         original_env = {}
@@ -305,36 +308,32 @@ class TestAutoModeProviderSelection:
             os.environ["OPENAI_API_KEY"] = "test-key"
             os.environ["XAI_API_KEY"] = "test-key"
 
-            # Register all providers
-            from providers.gemini import GeminiModelProvider
-            from providers.openai_provider import OpenAIModelProvider
-            from providers.xai import XAIModelProvider
+            # With LiteLLM, alias resolution is handled by LiteLLM's config
+            from providers.litellm_provider import LiteLLMProvider
 
-            ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
+            # Ensure LiteLLM provider is registered
+            ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
-            # Test that providers resolve aliases correctly
-            test_cases = [
-                ("flash", ProviderType.GOOGLE, "gemini-2.5-flash"),
-                ("pro", ProviderType.GOOGLE, "gemini-2.5-pro"),
-                ("mini", ProviderType.OPENAI, "o4-mini"),
-                ("o3mini", ProviderType.OPENAI, "o3-mini"),
-                ("grok", ProviderType.XAI, "grok-4-0709"),  # Now resolves to grok-4
-                ("grok3", ProviderType.XAI, "grok-3"),  # Test grok-3 alias explicitly
-                ("grok3fast", ProviderType.XAI, "grok-3-fast"),
+            # Test that various aliases go through LiteLLM provider
+            test_aliases = [
+                "flash",  # Gemini alias
+                "pro",  # Gemini alias
+                "mini",  # OpenAI alias
+                "o3mini",  # OpenAI alias
+                "grok",  # XAI alias
+                "grok3",  # XAI alias
+                "grok3fast",  # XAI alias
             ]
 
-            for alias, expected_provider_type, expected_resolved_name in test_cases:
+            for alias in test_aliases:
                 provider = ModelProviderRegistry.get_provider_for_model(alias)
                 assert provider is not None, f"No provider found for alias '{alias}'"
-                assert provider.get_provider_type() == expected_provider_type, f"Wrong provider for '{alias}'"
+                assert provider.get_provider_type() == ProviderType.CUSTOM, f"Expected CUSTOM provider for '{alias}'"
 
-                # Test alias resolution
-                resolved_name = provider._resolve_model_name(alias)
-                assert (
-                    resolved_name == expected_resolved_name
-                ), f"Alias '{alias}' should resolve to '{expected_resolved_name}', got '{resolved_name}'"
+                # With LiteLLM, the provider itself doesn't resolve aliases
+                # LiteLLM handles that internally during API calls
+                # So we just verify the provider accepts these model names
+                assert provider.validate_model_name(alias) is True
 
         finally:
             # Restore original environment

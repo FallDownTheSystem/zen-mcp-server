@@ -269,10 +269,13 @@ class TestConfigureProvidersFunction:
         ):
             configure_providers()
 
-            # Verify only OpenRouter provider is available
+            # With LiteLLM, everything goes through CUSTOM provider type
             available = ModelProviderRegistry.get_available_providers()
-            assert ProviderType.OPENROUTER in available
-            assert ProviderType.CUSTOM not in available
+            assert ProviderType.CUSTOM in available
+            # LiteLLMProvider is registered as CUSTOM type
+            provider = ModelProviderRegistry.get_provider(ProviderType.CUSTOM)
+            assert provider is not None
+            assert provider.__class__.__name__ == "LiteLLMProvider"
 
     def test_configure_providers_dual_setup(self):
         """Test configure_providers with both OpenRouter and Custom configured."""
@@ -292,10 +295,12 @@ class TestConfigureProvidersFunction:
         ):
             configure_providers()
 
-            # Verify both providers are available
+            # With LiteLLM, only CUSTOM provider type is registered
+            # (LiteLLM handles routing to different backends internally)
             available = ModelProviderRegistry.get_available_providers()
-            assert ProviderType.OPENROUTER in available
             assert ProviderType.CUSTOM in available
+            # Only one provider instance for all backends
+            assert len(available) == 1
 
     def test_configure_providers_no_valid_keys(self):
         """Test configure_providers raises error when no valid API keys."""

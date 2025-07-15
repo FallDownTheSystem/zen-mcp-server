@@ -309,6 +309,12 @@ def configure_providers():
         valid_providers.append("X.AI")
         logger.info("X.AI API key found - GROK models available via LiteLLM")
 
+    # Check for OpenRouter
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
+        valid_providers.append("OpenRouter")
+        logger.info("OpenRouter API key found - Multiple models available via LiteLLM")
+
     # Check for other LiteLLM-supported providers
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     if anthropic_key:

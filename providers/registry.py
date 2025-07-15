@@ -68,6 +68,7 @@ class ModelProviderRegistry:
         if provider_type == ProviderType.CUSTOM:
             # Check if it's LiteLLMProvider - it doesn't need special handling
             from .litellm_provider import LiteLLMProvider
+
             if provider_class == LiteLLMProvider:
                 # LiteLLMProvider doesn't need API key or URL - it uses env vars directly
                 provider = provider_class()
@@ -327,10 +328,7 @@ class ModelProviderRegistry:
         model_names = list(available_models.keys())
 
         # Prefer models known for deep reasoning
-        preferred_models = [
-            "o3", "o3-pro", "o3-deep-research",
-            "gemini-2.5-pro", "grok-3"
-        ]
+        preferred_models = ["o3", "o3-pro", "o3-deep-research", "gemini-2.5-pro", "grok-3"]
 
         for model in preferred_models:
             if model in model_names:

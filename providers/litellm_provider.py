@@ -48,14 +48,15 @@ class LiteLLMProvider(ModelProvider):
         """
         # No API key needed - LiteLLM will use environment variables
         super().__init__(api_key="", **kwargs)
-        
+
         # Load LiteLLM config if available
         from pathlib import Path
+
         config_path = Path(__file__).parent.parent / "litellm_config.yaml"
         if config_path.exists():
             os.environ["LITELLM_CONFIG_PATH"] = str(config_path)
             logger.info(f"Set LITELLM_CONFIG_PATH to {config_path}")
-            
+
         # Enable drop_params globally to handle model-specific restrictions
         litellm.drop_params = True
 
@@ -366,13 +367,14 @@ class LiteLLMProvider(ModelProvider):
 
     def list_models(self, respect_restrictions: bool = True) -> list[str]:
         """Return a list of model names available through LiteLLM.
-        
+
         This reads models from the model_metadata.yaml file which contains
-        all models configured for use with LiteLLM.
-        
+        all models configured for use with LiteLLM, and also includes
+        model aliases from litellm_config.yaml.
+
         Args:
             respect_restrictions: Whether to apply model restrictions
-            
+
         Returns:
             List of model names available through LiteLLM
         """
@@ -395,12 +397,44 @@ class LiteLLMProvider(ModelProvider):
             except Exception as e:
                 logger.warning(f"Failed to load model metadata: {e}")
                 # Fall back to a default list
+
+        # Also load aliases from litellm_config.yaml
+        config_path = Path(__file__).parent.parent / "litellm_config.yaml"
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    config = yaml.safe_load(f)
+                    if config and "model_list" in config:
+                        for model_config in config["model_list"]:
+                            # Add the main model name if not already present
+                            model_name = model_config.get("model_name")
+                            if model_name and model_name not in models:
+                                models.append(model_name)
+
+                            # Add any aliases (model_alias is at top level, not in litellm_params)
+                            aliases = model_config.get("model_alias", [])
+                            if isinstance(aliases, list):
+                                for alias in aliases:
+                                    if alias not in models:
+                                        models.append(alias)
+                            elif isinstance(aliases, str) and aliases not in models:
+                                models.append(aliases)
+            except Exception as e:
+                logger.warning(f"Failed to load litellm config: {e}")
                 models = [
-                    "o3", "o3-mini", "o3-pro", "o3-deep-research", "o4-mini",
+                    "o3",
+                    "o3-mini",
+                    "o3-pro",
+                    "o3-deep-research",
+                    "o4-mini",
                     "gpt-4.1-2025-04-14",
-                    "gemini-2.5-flash", "gemini-2.5-pro",
-                    "gemini-2.0-flash", "gemini-2.0-flash-lite",
-                    "grok-3", "grok-3-fast", "grok-4-0709"
+                    "gemini-2.5-flash",
+                    "gemini-2.5-pro",
+                    "gemini-2.0-flash",
+                    "gemini-2.0-flash-lite",
+                    "grok-3",
+                    "grok-3-fast",
+                    "grok-4-0709",
                 ]
 
         # Apply restrictions if requested

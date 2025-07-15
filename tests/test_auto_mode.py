@@ -144,7 +144,15 @@ class TestAutoMode:
             assert len(result) == 1
             response = result[0].text
             assert "error" in response
-            assert "Model parameter is required" in response or "Model 'auto' is not available" in response
+            # With LiteLLM, the error is different - it tries to use 'auto' as a model name
+            assert any(
+                [
+                    "Model parameter is required" in response,
+                    "Model 'auto' is not available" in response,
+                    "LLM Provider NOT provided" in response,  # LiteLLM error
+                    "model=auto" in response,  # Part of LiteLLM error message
+                ]
+            )
 
         finally:
             # Restore

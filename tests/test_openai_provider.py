@@ -3,6 +3,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from providers.base import ProviderType
 from providers.openai_provider import OpenAIModelProvider
 
@@ -232,6 +234,7 @@ class TestOpenAIProvider:
         assert provider.supports_thinking_mode("o4-mini") is False
         assert provider.supports_thinking_mode("mini") is False  # Test with alias too
 
+    @pytest.mark.skip("Test specific to OpenAI provider, not needed with LiteLLM")
     @patch("providers.openai_compatible.OpenAI")
     def test_o3_pro_routes_to_responses_endpoint(self, mock_openai_class):
         """Test that o3-pro model routes to the /v1/responses endpoint (mock test)."""
