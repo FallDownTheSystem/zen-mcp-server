@@ -19,10 +19,10 @@ class TestLiteLLMConsensusTimeout:
 
         # Mock the provider instance
         mock_provider = MagicMock(spec=LiteLLMProvider)
-        
+
         # Track all generate_content calls
         generate_calls = []
-        
+
         def track_generate_content(*args, **kwargs):
             generate_calls.append((args, kwargs))
             mock_response = MagicMock()
@@ -31,7 +31,7 @@ class TestLiteLLMConsensusTimeout:
             mock_response.metadata = {}
             mock_response.model_name = kwargs.get("model_name", "unknown")
             return mock_response
-            
+
         mock_provider.generate_content = MagicMock(side_effect=track_generate_content)
 
         # Mock get_model_provider to return our mock provider
@@ -67,7 +67,7 @@ class TestLiteLLMConsensusTimeout:
         # Mock the provider instance
         mock_provider = MagicMock(spec=LiteLLMProvider)
         mock_provider.generate_content = MagicMock()
-        
+
         # Set up the response
         mock_response = MagicMock()
         mock_response.content = "Response"
@@ -86,7 +86,7 @@ class TestLiteLLMConsensusTimeout:
             # The result should be valid JSON
             import json
             output = json.loads(result[0].text)
-            
+
             # Verify custom timeout was used
             assert mock_provider.generate_content.called
             call_kwargs = mock_provider.generate_content.call_args[1]
@@ -101,12 +101,12 @@ class TestLiteLLMConsensusTimeout:
 
         # Create provider mocks for each model
         providers = {}
-        
+
         def get_provider_mock(model_name):
             if model_name not in providers:
                 mock_provider = MagicMock(spec=LiteLLMProvider)
                 providers[model_name] = mock_provider
-                
+
                 # Set up behavior based on model
                 if model_name == "o3":
                     mock_provider.generate_content.side_effect = Timeout("Request timed out", model_name, "openai")
@@ -117,7 +117,7 @@ class TestLiteLLMConsensusTimeout:
                     mock_response.model_name = model_name
                     mock_response.metadata = {}
                     mock_provider.generate_content.return_value = mock_response
-                    
+
             return providers[model_name]
 
         with patch.object(tool, "get_model_provider", side_effect=get_provider_mock):
@@ -252,9 +252,9 @@ class TestLiteLLMConsensusTimeout:
         def get_provider_for_model(model_name):
             start_time = time.time()
             call_times.append(start_time)
-            
+
             mock_provider = MagicMock(spec=LiteLLMProvider)
-            
+
             if model_name == "slow-model":
                 # Simulate timeout immediately
                 mock_provider.generate_content.side_effect = Timeout("Too slow", model_name, "provider")
@@ -266,7 +266,7 @@ class TestLiteLLMConsensusTimeout:
                 response.model_name = model_name
                 response.metadata = {}
                 mock_provider.generate_content.return_value = response
-                
+
             return mock_provider
 
         with patch.object(tool, "get_model_provider", side_effect=get_provider_for_model):

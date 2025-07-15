@@ -6,9 +6,6 @@ and integration with language models.
 import json
 import os
 import unittest
-from unittest.mock import Mock, patch
-
-import pytest
 
 from providers.base import ProviderType
 from providers.litellm_provider import LiteLLMProvider

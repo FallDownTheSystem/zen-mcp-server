@@ -63,6 +63,26 @@ class LiteLLMProvider(ModelProvider):
         # Get model metadata (if provided)
         self.model_metadata = kwargs.get("model_metadata", {})
 
+        # Configure observability callbacks
+        self._configure_observability()
+
+    def _configure_observability(self):
+        """Configure LiteLLM observability callbacks."""
+        try:
+            # Check if observability is enabled
+            enable_observability = os.getenv("OBSERVABILITY_ENABLED", "true").lower() == "true"
+
+            if enable_observability:
+                from observability.callbacks import configure_litellm_callbacks
+                configure_litellm_callbacks(enable_observability=True)
+                logger.info("LiteLLM observability callbacks configured")
+            else:
+                logger.info("LiteLLM observability callbacks disabled")
+
+        except Exception as e:
+            logger.warning(f"Failed to configure observability callbacks: {e}")
+            # Don't fail initialization if observability setup fails
+
     def get_provider_type(self) -> ProviderType:
         """Get the provider type."""
         # Return CUSTOM as this is a meta-provider
@@ -447,3 +467,15 @@ class LiteLLMProvider(ModelProvider):
             models = filtered_models
 
         return models
+
+    def get_observability_stats(self):
+        """Get observability statistics from the callback handler."""
+        try:
+            # Find the ZenObservabilityHandler in the callbacks
+            for callback in litellm.callbacks:
+                if hasattr(callback, 'get_stats'):
+                    return callback.get_stats()
+            return {"error": "No observability handler found"}
+        except Exception as e:
+            logger.warning(f"Failed to get observability stats: {e}")
+            return {"error": str(e)}

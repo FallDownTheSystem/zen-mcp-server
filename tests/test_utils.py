@@ -34,16 +34,16 @@ class TestFileUtils:
         # In the new security model, safe files like /etc/passwd
         # can be read as they're not in the dangerous paths list
         import platform
-        
+
         if platform.system() == "Windows":
             # On Windows, use a Windows system file
             test_file = "C:\\Windows\\System32\\drivers\\etc\\hosts"
         else:
             # On Unix systems
             test_file = "/etc/passwd"
-            
+
         content, tokens = read_file_content(test_file)
-        
+
         # Check if file exists and was read successfully
         if "--- FILE NOT FOUND:" in content:
             # File doesn't exist on this system, that's OK for the test

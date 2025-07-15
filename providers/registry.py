@@ -31,7 +31,7 @@ class ModelProviderRegistry:
         """Register a new provider class.
 
         Args:
-            provider_type: Type of the provider (e.g., ProviderType.GOOGLE)
+            provider_type: Type of the provider (e.g., ProviderType.CUSTOM)
             provider_class: Class that implements ModelProvider interface
         """
         instance = cls()
@@ -218,12 +218,8 @@ class ModelProviderRegistry:
             API key string or None if not found
         """
         key_mapping = {
-            ProviderType.GOOGLE: "GEMINI_API_KEY",
-            ProviderType.OPENAI: "OPENAI_API_KEY",
-            ProviderType.XAI: "XAI_API_KEY",
-            ProviderType.OPENROUTER: "OPENROUTER_API_KEY",
             ProviderType.CUSTOM: "CUSTOM_API_KEY",  # Can be empty for providers that don't need auth
-            ProviderType.DIAL: "DIAL_API_KEY",
+            # Legacy provider types removed - all models now use LiteLLMProvider
         }
 
         env_var = key_mapping.get(provider_type)

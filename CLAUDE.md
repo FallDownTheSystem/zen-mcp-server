@@ -159,13 +159,13 @@ python -m pytest tests/ -v -m "not integration"
 python -m pytest tests/test_chat_simple.py -v
 
 # Run specific test class
-python -m pytest tests/test_openai_provider.py::TestOpenAIProvider -v
+python -m pytest tests/test_litellm_provider.py::TestLiteLLMProvider -v
 
 # Run specific test method
-python -m pytest tests/test_openai_provider.py::TestOpenAIProvider::test_model_validation -v
+python -m pytest tests/test_litellm_provider.py::TestLiteLLMProvider::test_model_validation -v
 
 # Run multiple specific tests
-python -m pytest tests/test_openai_provider.py tests/test_o3_pro_response.py -v -m "not integration"
+python -m pytest tests/test_litellm_provider.py tests/test_consensus.py -v -m "not integration"
 
 # Run tests with coverage
 python -m pytest tests/ --cov=. --cov-report=html -m "not integration"
@@ -238,6 +238,23 @@ This simplified version includes only two tools:
    - Robust error handling - partial failures don't stop other models
    - Optional: disable cross-feedback for faster single-phase consensus
 
+## LiteLLM Migration
+
+As of version 6.0, the Zen MCP Server has been migrated to use LiteLLM for unified model access:
+
+### Key Changes:
+- **Unified Provider**: All models now use a single `LiteLLMProvider` instead of separate provider implementations
+- **Simplified Architecture**: Removed individual provider classes (OpenAI, Gemini, XAI, etc.)
+- **Configuration**: Model configuration is now handled via `litellm_config.yaml` and `model_metadata.yaml`
+- **Backward Compatibility**: All existing model aliases and functionality preserved
+
+### Benefits:
+- **Reduced Complexity**: Single provider handles all model routing
+- **Better Reliability**: LiteLLM handles fallbacks, retries, and error handling
+- **Easier Maintenance**: Single codebase for all model integrations
+- **Future-Proof**: Easy to add new models supported by LiteLLM
+- **Enhanced Observability**: Comprehensive monitoring and cost tracking via LiteLLM callbacks
+
 ### Using the Consensus Tool
 
 The consensus tool operates in a single call with parallel processing:
@@ -302,6 +319,124 @@ The tool will:
 - Disable cross-feedback for fastest results: `"enable_cross_feedback": false`
 - Models that fail don't block others - check `failed_models` array
 
+## Observability and Monitoring
+
+The Zen MCP Server includes comprehensive observability features that provide monitoring, cost tracking, and performance metrics for all LLM API calls through LiteLLM's callback system.
+
+### Features
+
+#### Cost Tracking
+- **Per-model costs**: Track API costs for each model
+- **Usage analytics**: Monitor token usage patterns
+- **Cumulative tracking**: Track total costs across all calls
+- **Cost optimization**: Identify expensive operations
+
+#### Latency Monitoring
+- **Response times**: Track API call latency by model
+- **Performance trends**: Monitor average response times
+- **Bottleneck identification**: Identify slow-performing models
+
+#### Secure Logging
+- **PII prevention**: Automatic redaction of sensitive information
+- **Content safety**: Secure handling of user data
+- **Configurable verbosity**: Control logging detail level
+
+### Configuration
+
+Configure observability via environment variables:
+
+```bash
+# Core Settings
+OBSERVABILITY_ENABLED=true          # Enable/disable observability (default: true)
+OBSERVABILITY_VERBOSE=false         # Enable verbose LiteLLM logging (default: false)
+OBSERVABILITY_LOG_REQUESTS=false    # Log request content (default: false)
+OBSERVABILITY_LOG_RESPONSES=false   # Log response content (default: false)
+OBSERVABILITY_REDACT_PII=true       # Enable PII redaction (default: true)
+```
+
+#### Development Mode
+```bash
+# Enable detailed logging for development
+OBSERVABILITY_ENABLED=true
+OBSERVABILITY_VERBOSE=true
+OBSERVABILITY_LOG_REQUESTS=true
+OBSERVABILITY_LOG_RESPONSES=true
+OBSERVABILITY_REDACT_PII=false
+```
+
+#### Production Mode
+```bash
+# Secure production configuration
+OBSERVABILITY_ENABLED=true
+OBSERVABILITY_VERBOSE=false
+OBSERVABILITY_LOG_REQUESTS=false
+OBSERVABILITY_LOG_RESPONSES=false
+OBSERVABILITY_REDACT_PII=true
+```
+
+### Monitoring Output
+
+#### Activity Logs
+Observability events are logged to `logs/mcp_activity.log`:
+- `LLM_CALL_START`: When LLM request begins
+- `LLM_CALL_END`: When LLM request completes
+- `LLM_SUCCESS`: When LLM request succeeds
+- `LLM_FAILURE`: When LLM request fails
+
+#### Cost Tracking Logs
+Cost information is logged to `logs/mcp_server.log`:
+```
+COST_TRACKING: model=gpt-4o cost=$0.002500 usage={'input_tokens': 100, 'output_tokens': 50, 'total_tokens': 150} total_cost=$0.012500 calls=5
+```
+
+#### Latency Metrics
+Performance metrics are logged to `logs/mcp_server.log`:
+```
+LATENCY_TRACKING: model=gpt-4o latency=2.345s avg_latency=2.123s calls=5
+```
+
+### Security Features
+
+#### PII Redaction
+The observability system automatically redacts sensitive information:
+- Email addresses → `[EMAIL]`
+- Phone numbers → `[PHONE]`
+- Social security numbers → `[SSN]`
+- Credit card numbers → `[CARD]`
+- API keys → `[API_KEY]`
+- Passwords/secrets → `[REDACTED]`
+
+#### Content Safety
+- Content length limits prevent excessive logging
+- Configurable verbosity controls data exposure
+- Error isolation ensures observability failures don't affect LLM calls
+
+### Testing
+
+Test the observability system:
+
+```bash
+# Run observability tests
+source .zen_venv/Scripts/activate
+python -m pytest tests/test_observability.py -v
+
+# Test all components
+python -m pytest tests/test_observability.py::TestSecureLogger -v
+python -m pytest tests/test_observability.py::TestCostTracker -v
+python -m pytest tests/test_observability.py::TestLatencyTracker -v
+```
+
+### Implementation
+
+The observability system is implemented through:
+- **ZenObservabilityHandler**: Custom LiteLLM callback handler
+- **CostTracker**: Cost monitoring and analytics
+- **LatencyTracker**: Performance monitoring
+- **SecureLogger**: PII redaction and safe logging
+- **LiteLLM Integration**: Automatic callback registration
+
+For detailed implementation information, see `observability/README.md`.
+
 ### Common Troubleshooting
 
 #### Server Issues
@@ -350,7 +485,7 @@ isort --check-only .
 - `simulator_tests/` - Individual test modules
 - `tests/` - Unit test suite
 - `tools/` - MCP tool implementations (only chat.py and consensus.py)
-- `providers/` - AI provider implementations
+- `providers/` - AI provider implementations (unified LiteLLM provider)
 - `systemprompts/` - System prompt definitions (only chat and consensus prompts)
 - `logs/` - Server log files
 

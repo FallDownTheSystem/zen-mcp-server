@@ -288,7 +288,7 @@ class TestIntegrationScenarios:
             files = expand_paths([str(user_project)])
 
         file_paths = [str(f) for f in files]
-        
+
         # Debug: Print what files were found
         if not file_paths:
             # If no files found, the test is missing something
