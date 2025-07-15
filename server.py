@@ -287,108 +287,49 @@ def configure_providers():
         logger.debug(f"  {key}: {'[PRESENT]' if value else '[MISSING]'}")
     from providers import ModelProviderRegistry
     from providers.base import ProviderType
-    from providers.custom import CustomProvider
-    from providers.dial import DIALModelProvider
-    from providers.gemini import GeminiModelProvider
-    from providers.openai_provider import OpenAIModelProvider
-    from providers.openrouter import OpenRouterProvider
-    from providers.xai import XAIModelProvider
+    from providers.litellm_provider import LiteLLMProvider
     from utils.model_restrictions import get_restriction_service
 
     valid_providers = []
-    has_native_apis = False
-    has_openrouter = False
-    has_custom = False
 
-    # Check for Gemini API key
+    # Check for any API keys that LiteLLM can use
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key and gemini_key != "your_gemini_api_key_here":
         valid_providers.append("Gemini")
-        has_native_apis = True
-        logger.info("Gemini API key found - Gemini models available")
+        logger.info("Gemini API key found - Gemini models available via LiteLLM")
 
-    # Check for OpenAI API key
     openai_key = os.getenv("OPENAI_API_KEY")
     logger.debug(f"OpenAI key check: key={'[PRESENT]' if openai_key else '[MISSING]'}")
     if openai_key and openai_key != "your_openai_api_key_here":
-        valid_providers.append("OpenAI (o3)")
-        has_native_apis = True
-        logger.info("OpenAI API key found - o3 model available")
-    else:
-        if not openai_key:
-            logger.debug("OpenAI API key not found in environment")
-        else:
-            logger.debug("OpenAI API key is placeholder value")
+        valid_providers.append("OpenAI")
+        logger.info("OpenAI API key found - OpenAI models available via LiteLLM")
 
-    # Check for X.AI API key
     xai_key = os.getenv("XAI_API_KEY")
     if xai_key and xai_key != "your_xai_api_key_here":
-        valid_providers.append("X.AI (GROK)")
-        has_native_apis = True
-        logger.info("X.AI API key found - GROK models available")
+        valid_providers.append("X.AI")
+        logger.info("X.AI API key found - GROK models available via LiteLLM")
 
-    # Check for DIAL API key
-    dial_key = os.getenv("DIAL_API_KEY")
-    if dial_key and dial_key != "your_dial_api_key_here":
-        valid_providers.append("DIAL")
-        has_native_apis = True
-        logger.info("DIAL API key found - DIAL models available")
+    # Check for other LiteLLM-supported providers
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        valid_providers.append("Anthropic")
+        logger.info("Anthropic API key found - Claude models available via LiteLLM")
 
-    # Check for OpenRouter API key
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
-    logger.debug(f"OpenRouter key check: key={'[PRESENT]' if openrouter_key else '[MISSING]'}")
-    if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
-        valid_providers.append("OpenRouter")
-        has_openrouter = True
-        logger.info("OpenRouter API key found - Multiple models available via OpenRouter")
-    else:
-        if not openrouter_key:
-            logger.debug("OpenRouter API key not found in environment")
-        else:
-            logger.debug("OpenRouter API key is placeholder value")
-
-    # Check for custom API endpoint (Ollama, vLLM, etc.)
+    # Custom endpoints can also be handled by LiteLLM
     custom_url = os.getenv("CUSTOM_API_URL")
     if custom_url:
-        # IMPORTANT: Always read CUSTOM_API_KEY even if empty
-        # - Some providers (vLLM, LM Studio, enterprise APIs) require authentication
-        # - Others (Ollama) work without authentication (empty key)
-        # - DO NOT remove this variable - it's needed for provider factory function
-        custom_key = os.getenv("CUSTOM_API_KEY", "")  # Default to empty (Ollama doesn't need auth)
+        custom_key = os.getenv("CUSTOM_API_KEY", "")
         custom_model = os.getenv("CUSTOM_MODEL_NAME", "llama3.2")
         valid_providers.append(f"Custom API ({custom_url})")
-        has_custom = True
         logger.info(f"Custom API endpoint found: {custom_url} with model {custom_model}")
         if custom_key:
             logger.debug("Custom API key provided for authentication")
         else:
             logger.debug("No custom API key provided (using unauthenticated access)")
 
-    # Register providers in priority order:
-    # 1. Native APIs first (most direct and efficient)
-    if has_native_apis:
-        if gemini_key and gemini_key != "your_gemini_api_key_here":
-            ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-        if openai_key and openai_key != "your_openai_api_key_here":
-            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-        if xai_key and xai_key != "your_xai_api_key_here":
-            ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
-        if dial_key and dial_key != "your_dial_api_key_here":
-            ModelProviderRegistry.register_provider(ProviderType.DIAL, DIALModelProvider)
-
-    # 2. Custom provider second (for local/private models)
-    if has_custom:
-        # Factory function that creates CustomProvider with proper parameters
-        def custom_provider_factory(api_key=None):
-            # api_key is CUSTOM_API_KEY (can be empty for Ollama), base_url from CUSTOM_API_URL
-            base_url = os.getenv("CUSTOM_API_URL", "")
-            return CustomProvider(api_key=api_key or "", base_url=base_url)  # Use provided API key or empty string
-
-        ModelProviderRegistry.register_provider(ProviderType.CUSTOM, custom_provider_factory)
-
-    # 3. OpenRouter last (catch-all for everything else)
-    if has_openrouter:
-        ModelProviderRegistry.register_provider(ProviderType.OPENROUTER, OpenRouterProvider)
+    # Register single LiteLLMProvider for all models
+    # LiteLLM will handle routing to the appropriate backend based on model name
+    ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
     # Require at least one valid provider
     if not valid_providers:
@@ -402,19 +343,7 @@ def configure_providers():
             "- CUSTOM_API_URL for local models (Ollama, vLLM, etc.)"
         )
 
-    logger.info(f"Available providers: {', '.join(valid_providers)}")
-
-    # Log provider priority
-    priority_info = []
-    if has_native_apis:
-        priority_info.append("Native APIs (Gemini, OpenAI)")
-    if has_custom:
-        priority_info.append("Custom endpoints")
-    if has_openrouter:
-        priority_info.append("OpenRouter (catch-all)")
-
-    if len(priority_info) > 1:
-        logger.info(f"Provider priority: {' → '.join(priority_info)}")
+    logger.info(f"Available providers via LiteLLM: {', '.join(valid_providers)}")
 
     # Register cleanup function for providers
     def cleanup_providers():
