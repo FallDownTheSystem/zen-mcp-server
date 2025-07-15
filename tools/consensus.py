@@ -622,7 +622,7 @@ class ConsensusTool(SimpleTool):
 {self.initial_prompt}
 
 Your initial response was:
-{initial_response.get('response', 'No response available')}
+{initial_response.get("response", "No response available")}
 
 Other AI models have also provided their perspectives on this same question. Here are their responses:
 

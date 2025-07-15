@@ -95,16 +95,19 @@ class TestLiteLLMProvider:
         assert provider.supports_thinking_mode("regular-model") is False
 
     def test_supports_thinking_mode_known_models(self):
-        """Test supports_thinking_mode detects known thinking models."""
+        """Test supports_thinking_mode detects known thinking models based on metadata."""
         provider = LiteLLMProvider()
 
-        # O3 and O4 models support thinking
-        assert provider.supports_thinking_mode("o3") is True
-        assert provider.supports_thinking_mode("o3-mini") is True
-        assert provider.supports_thinking_mode("o4-mini") is True
-        assert provider.supports_thinking_mode("O3-Pro") is True  # Case insensitive
+        # Models that support thinking according to metadata
+        assert provider.supports_thinking_mode("gemini-2.5-flash") is True
+        assert provider.supports_thinking_mode("gemini-2.5-pro") is True
+        assert provider.supports_thinking_mode("gemini-2.0-flash") is True
+        assert provider.supports_thinking_mode("grok-4") is True
 
-        # Other models don't
+        # Models that don't support thinking according to metadata
+        assert provider.supports_thinking_mode("o3") is False  # Has advanced reasoning but not extended thinking
+        assert provider.supports_thinking_mode("o3-mini") is False
+        assert provider.supports_thinking_mode("o4-mini") is False
         assert provider.supports_thinking_mode("gpt-4") is False
         assert provider.supports_thinking_mode("gemini-pro") is False
 
@@ -299,7 +302,9 @@ class TestLiteLLMProvider:
             mock_completion.return_value = mock_response
 
             response = provider.generate_content(
-                prompt="Test", model_name="gpt-4", stream=True  # Stream parameter is ignored
+                prompt="Test",
+                model_name="gpt-4",
+                stream=True,  # Stream parameter is ignored
             )
 
             # Should return regular response
