@@ -233,8 +233,39 @@ class LiteLLMProvider(ModelProvider):
             # Call LiteLLM
             response = completion(**completion_kwargs)
 
+            # Handle streaming response (not fully implemented, convert to regular response)
+            if hasattr(response, '__iter__') and not hasattr(response, 'choices'):
+                # This is a streaming response - consume it and convert to regular response
+                logger.warning(f"Streaming requested but not fully implemented for model {model_name}, converting to regular response")
+                content_chunks = []
+                for chunk in response:
+                    if hasattr(chunk, 'choices') and chunk.choices:
+                        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                            if chunk.choices[0].delta.content:
+                                content_chunks.append(chunk.choices[0].delta.content)
+                content = ''.join(content_chunks)
+                
+                # For streaming, we don't have usage info typically
+                usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+                
+                # Return early for streaming
+                return ModelResponse(
+                    content=content,
+                    usage=usage,
+                    model_name=model_name,
+                    friendly_name=self.FRIENDLY_NAME,
+                    provider=self.get_provider_type(),
+                    metadata={"streaming": True},
+                )
+
             # Extract response content
             content = response.choices[0].message.content
+            
+            # Debug: Log the response structure if content is None
+            if content is None:
+                logger.warning(f"LiteLLM response content is None for model {model_name}")
+                logger.debug(f"Full response: {response}")
+                logger.debug(f"Message: {response.choices[0].message}")
 
             # Build usage dict
             usage = {}
