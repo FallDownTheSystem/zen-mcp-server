@@ -66,12 +66,17 @@ class ModelProviderRegistry:
 
         # For custom providers, handle special initialization requirements
         if provider_type == ProviderType.CUSTOM:
+            # Check if it's LiteLLMProvider - it doesn't need special handling
+            from .litellm_provider import LiteLLMProvider
+            if provider_class == LiteLLMProvider:
+                # LiteLLMProvider doesn't need API key or URL - it uses env vars directly
+                provider = provider_class()
             # Check if it's a factory function (callable but not a class)
-            if callable(provider_class) and not isinstance(provider_class, type):
+            elif callable(provider_class) and not isinstance(provider_class, type):
                 # Factory function - call it with api_key parameter
                 provider = provider_class(api_key=api_key)
             else:
-                # Regular class - need to handle URL requirement
+                # Legacy custom provider - need to handle URL requirement
                 custom_url = os.getenv("CUSTOM_API_URL", "")
                 if not custom_url:
                     if api_key:  # Key is set but URL is missing
@@ -97,10 +102,7 @@ class ModelProviderRegistry:
     def get_provider_for_model(cls, model_name: str) -> Optional[ModelProvider]:
         """Get provider instance for a specific model name.
 
-        Provider priority order:
-        1. Native APIs (GOOGLE, OPENAI) - Most direct and efficient
-        2. CUSTOM - For local/private models with specific endpoints
-        3. OPENROUTER - Catch-all for cloud models via unified API
+        With LiteLLM integration, all models are handled by the single LiteLLMProvider.
 
         Args:
             model_name: Name of the model (e.g., "gemini-2.5-flash", "o3-mini")
@@ -110,36 +112,21 @@ class ModelProviderRegistry:
         """
         logging.debug(f"get_provider_for_model called with model_name='{model_name}'")
 
-        # Define explicit provider priority order
-        # Native APIs first, then custom endpoints, then catch-all providers
-        PROVIDER_PRIORITY_ORDER = [
-            ProviderType.GOOGLE,  # Direct Gemini access
-            ProviderType.OPENAI,  # Direct OpenAI access
-            ProviderType.XAI,  # Direct X.AI GROK access
-            ProviderType.DIAL,  # DIAL unified API access
-            ProviderType.CUSTOM,  # Local/self-hosted models
-            ProviderType.OPENROUTER,  # Catch-all for cloud models
-        ]
-
-        # Check providers in priority order
+        # With LiteLLM, we only have one provider that handles all models
         instance = cls()
         logging.debug(f"Registry instance: {instance}")
         logging.debug(f"Available providers in registry: {list(instance._providers.keys())}")
 
-        for provider_type in PROVIDER_PRIORITY_ORDER:
-            if provider_type in instance._providers:
-                logging.debug(f"Found {provider_type} in registry")
-                # Get or create provider instance
-                provider = cls.get_provider(provider_type)
-                if provider and provider.validate_model_name(model_name):
-                    logging.debug(f"{provider_type} validates model {model_name}")
-                    return provider
-                else:
-                    logging.debug(f"{provider_type} does not validate model {model_name}")
-            else:
-                logging.debug(f"{provider_type} not found in registry")
+        # LiteLLM provider is registered as CUSTOM type
+        if ProviderType.CUSTOM in instance._providers:
+            provider = cls.get_provider(ProviderType.CUSTOM)
+            if provider:
+                # LiteLLM provider always returns True for model validation
+                # It will handle errors during actual API calls
+                logging.debug(f"Returning LiteLLMProvider for model {model_name}")
+                return provider
 
-        logging.debug(f"No provider found for model {model_name}")
+        logging.debug(f"No LiteLLM provider found for model {model_name}")
         return None
 
     @classmethod
@@ -265,160 +252,91 @@ class ModelProviderRegistry:
         # Get available models respecting restrictions
         available_models = cls.get_available_models(respect_restrictions=True)
 
-        # Group by provider
-        openai_models = [m for m, p in available_models.items() if p == ProviderType.OPENAI]
-        gemini_models = [m for m, p in available_models.items() if p == ProviderType.GOOGLE]
-        xai_models = [m for m, p in available_models.items() if p == ProviderType.XAI]
-        openrouter_models = [m for m, p in available_models.items() if p == ProviderType.OPENROUTER]
-        custom_models = [m for m, p in available_models.items() if p == ProviderType.CUSTOM]
+        # With LiteLLM, all models are registered under CUSTOM provider type
+        # So we just work with the model names directly
+        all_models = list(available_models.keys())
 
-        openai_available = bool(openai_models)
-        gemini_available = bool(gemini_models)
-        xai_available = bool(xai_models)
-        openrouter_available = bool(openrouter_models)
-        custom_available = bool(custom_models)
+        if not all_models:
+            # No models available due to restrictions
+            logging.warning("No models available due to restrictions")
+            return "gemini-2.5-flash"  # Default fallback
 
         if tool_category == ToolModelCategory.EXTENDED_REASONING:
             # Prefer thinking-capable models for deep reasoning tools
-            if openai_available and "o3" in openai_models:
+            if "o3" in all_models:
                 return "o3"  # O3 for deep reasoning
-            elif openai_available and openai_models:
-                # Fall back to any available OpenAI model
-                return openai_models[0]
-            elif xai_available and "grok-3" in xai_models:
+            elif "grok-3" in all_models:
                 return "grok-3"  # GROK-3 for deep reasoning
-            elif xai_available and xai_models:
-                # Fall back to any available XAI model
-                return xai_models[0]
-            elif gemini_available and any("pro" in m for m in gemini_models):
-                # Find the pro model (handles full names)
-                return next(m for m in gemini_models if "pro" in m)
-            elif gemini_available and gemini_models:
-                # Fall back to any available Gemini model
-                return gemini_models[0]
-            elif openrouter_available:
-                # Try to find thinking-capable model from openrouter
-                thinking_model = cls._find_extended_thinking_model()
-                if thinking_model:
-                    return thinking_model
-                # Fallback to first available OpenRouter model
-                return openrouter_models[0]
-            elif custom_available:
-                # Fallback to custom models when available
-                return custom_models[0]
+            elif any("pro" in m for m in all_models):
+                # Find the pro model
+                return next(m for m in all_models if "pro" in m)
+            elif all_models:
+                # Fall back to first available model
+                return all_models[0]
             else:
-                # Fallback to pro if nothing found
-                return "gemini-2.5-pro"
+                return "gemini-2.5-pro"  # Default
 
         elif tool_category == ToolModelCategory.FAST_RESPONSE:
             # Prefer fast, cost-efficient models
-            if openai_available and "o4-mini" in openai_models:
+            if "o4-mini" in all_models:
                 return "o4-mini"  # Latest, fast and efficient
-            elif openai_available and "o3-mini" in openai_models:
+            elif "o3-mini" in all_models:
                 return "o3-mini"  # Second choice
-            elif openai_available and openai_models:
-                # Fall back to any available OpenAI model
-                return openai_models[0]
-            elif xai_available and "grok-3-fast" in xai_models:
+            elif "grok-3-fast" in all_models:
                 return "grok-3-fast"  # GROK-3 Fast for speed
-            elif xai_available and xai_models:
-                # Fall back to any available XAI model
-                return xai_models[0]
-            elif gemini_available and any("flash" in m for m in gemini_models):
-                # Find the flash model (handles full names)
-                # Prefer 2.5 over 2.0 for backward compatibility
-                flash_models = [m for m in gemini_models if "flash" in m]
-                # Sort to ensure 2.5 comes before 2.0
+            elif any("flash" in m for m in all_models):
+                # Find flash models and prefer newer versions
+                flash_models = [m for m in all_models if "flash" in m]
                 flash_models_sorted = sorted(flash_models, reverse=True)
                 return flash_models_sorted[0]
-            elif gemini_available and gemini_models:
-                # Fall back to any available Gemini model
-                return gemini_models[0]
-            elif openrouter_available:
-                # Fallback to first available OpenRouter model
-                return openrouter_models[0]
-            elif custom_available:
-                # Fallback to custom models when available
-                return custom_models[0]
+            elif all_models:
+                return all_models[0]
             else:
-                # Default to flash
-                return "gemini-2.5-flash"
+                return "gemini-2.5-flash"  # Default
 
-        # BALANCED or no category specified - use existing balanced logic
-        if openai_available and "o4-mini" in openai_models:
+        # BALANCED or no category specified
+        if "o4-mini" in all_models:
             return "o4-mini"  # Latest balanced performance/cost
-        elif openai_available and "o3-mini" in openai_models:
+        elif "o3-mini" in all_models:
             return "o3-mini"  # Second choice
-        elif openai_available and openai_models:
-            return openai_models[0]
-        elif xai_available and "grok-3" in xai_models:
+        elif "grok-3" in all_models:
             return "grok-3"  # GROK-3 as balanced choice
-        elif xai_available and xai_models:
-            return xai_models[0]
-        elif gemini_available and any("flash" in m for m in gemini_models):
-            # Prefer 2.5 over 2.0 for backward compatibility
-            flash_models = [m for m in gemini_models if "flash" in m]
+        elif any("flash" in m for m in all_models):
+            # Prefer newer flash models
+            flash_models = [m for m in all_models if "flash" in m]
             flash_models_sorted = sorted(flash_models, reverse=True)
             return flash_models_sorted[0]
-        elif gemini_available and gemini_models:
-            return gemini_models[0]
-        elif openrouter_available:
-            return openrouter_models[0]
-        elif custom_available:
-            # Fallback to custom models when available
-            return custom_models[0]
+        elif all_models:
+            return all_models[0]
         else:
-            # No models available due to restrictions - check if any providers exist
-            if not available_models:
-                # This might happen if all models are restricted
-                logging.warning("No models available due to restrictions")
             # Return a reasonable default for backward compatibility
             return "gemini-2.5-flash"
 
     @classmethod
     def _find_extended_thinking_model(cls) -> Optional[str]:
-        """Find a model suitable for extended reasoning from custom/openrouter providers.
+        """Find a model suitable for extended reasoning.
+
+        This method is kept for backward compatibility but simplified
+        for LiteLLM integration.
 
         Returns:
             Model name if found, None otherwise
         """
-        # Check custom provider first
-        custom_provider = cls.get_provider(ProviderType.CUSTOM)
-        if custom_provider:
-            # Check if it's a CustomModelProvider and has thinking models
-            try:
-                from providers.custom import CustomProvider
+        # With LiteLLM, we can check available models directly
+        available_models = cls.get_available_models(respect_restrictions=True)
+        model_names = list(available_models.keys())
 
-                if isinstance(custom_provider, CustomProvider) and hasattr(custom_provider, "model_registry"):
-                    for model_name, config in custom_provider.model_registry.items():
-                        if config.get("supports_extended_thinking", False):
-                            return model_name
-            except ImportError:
-                pass
+        # Prefer models known for deep reasoning
+        preferred_models = [
+            "o3", "o3-pro", "o3-deep-research",
+            "gemini-2.5-pro", "grok-3"
+        ]
 
-        # Then check OpenRouter for high-context/powerful models
-        openrouter_provider = cls.get_provider(ProviderType.OPENROUTER)
-        if openrouter_provider:
-            # Prefer models known for deep reasoning
-            preferred_models = [
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
-                "google/gemini-2.5-pro",
-                "google/gemini-pro-1.5",
-                "meta-llama/llama-3.1-70b-instruct",
-                "mistralai/mixtral-8x7b-instruct",
-            ]
-            for model in preferred_models:
-                try:
-                    if openrouter_provider.validate_model_name(model):
-                        return model
-                except Exception as e:
-                    # Log the error for debugging purposes but continue searching
-                    import logging
+        for model in preferred_models:
+            if model in model_names:
+                return model
 
-                    logging.warning(f"Model validation for '{model}' on OpenRouter failed: {e}")
-                    continue
-
+        # Return None if no suitable model found
         return None
 
     @classmethod

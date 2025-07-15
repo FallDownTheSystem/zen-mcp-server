@@ -48,12 +48,16 @@ class LiteLLMProvider(ModelProvider):
         """
         # No API key needed - LiteLLM will use environment variables
         super().__init__(api_key="", **kwargs)
-
-        # Load LiteLLM configuration if available
-        config_path = kwargs.get("config_path", "litellm_config.yaml")
-        if os.path.exists(config_path):
-            logger.info(f"Loading LiteLLM config from {config_path}")
-            # LiteLLM will automatically load config from environment
+        
+        # Load LiteLLM config if available
+        from pathlib import Path
+        config_path = Path(__file__).parent.parent / "litellm_config.yaml"
+        if config_path.exists():
+            os.environ["LITELLM_CONFIG_PATH"] = str(config_path)
+            logger.info(f"Set LITELLM_CONFIG_PATH to {config_path}")
+            
+        # Enable drop_params globally to handle model-specific restrictions
+        litellm.drop_params = True
 
         # Get model metadata (if provided)
         self.model_metadata = kwargs.get("model_metadata", {})
@@ -359,3 +363,53 @@ class LiteLLMProvider(ModelProvider):
             # Same exception handling as sync version
             logger.error(f"Async LiteLLM error: {type(e).__name__}: {e}")
             raise
+
+    def list_models(self, respect_restrictions: bool = True) -> list[str]:
+        """Return a list of model names available through LiteLLM.
+        
+        This reads models from the model_metadata.yaml file which contains
+        all models configured for use with LiteLLM.
+        
+        Args:
+            respect_restrictions: Whether to apply model restrictions
+            
+        Returns:
+            List of model names available through LiteLLM
+        """
+        from pathlib import Path
+
+        import yaml
+
+        from utils.model_restrictions import get_restriction_service
+
+        models = []
+
+        # Load model metadata to get list of available models
+        metadata_path = Path(__file__).parent.parent / "model_metadata.yaml"
+        if metadata_path.exists():
+            try:
+                with open(metadata_path) as f:
+                    metadata = yaml.safe_load(f)
+                    if metadata and "models" in metadata:
+                        models = list(metadata["models"].keys())
+            except Exception as e:
+                logger.warning(f"Failed to load model metadata: {e}")
+                # Fall back to a default list
+                models = [
+                    "o3", "o3-mini", "o3-pro", "o3-deep-research", "o4-mini",
+                    "gpt-4.1-2025-04-14",
+                    "gemini-2.5-flash", "gemini-2.5-pro",
+                    "gemini-2.0-flash", "gemini-2.0-flash-lite",
+                    "grok-3", "grok-3-fast", "grok-4-0709"
+                ]
+
+        # Apply restrictions if requested
+        if respect_restrictions:
+            restriction_service = get_restriction_service()
+            filtered_models = []
+            for model in models:
+                if restriction_service.is_allowed(self.get_provider_type(), model):
+                    filtered_models.append(model)
+            models = filtered_models
+
+        return models
