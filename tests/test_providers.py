@@ -62,12 +62,15 @@ class TestModelProviderRegistry:
     @pytest.mark.no_mock_provider
     def test_get_provider_for_model(self):
         """Test getting provider for a specific model"""
-        ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
+        # With LiteLLM architecture, we need to register LiteLLM as CUSTOM provider
+        from providers.litellm_provider import LiteLLMProvider
+        
+        ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
         provider = ModelProviderRegistry.get_provider_for_model("gemini-2.5-flash")
 
         assert provider is not None
-        assert isinstance(provider, GeminiModelProvider)
+        assert isinstance(provider, LiteLLMProvider)
 
     def test_get_available_providers(self):
         """Test getting list of available providers"""

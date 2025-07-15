@@ -5,8 +5,11 @@ Test file protection mechanisms to ensure MCP doesn't scan:
 3. Excluded directories
 """
 
+import os
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from utils.file_utils import (
     expand_paths,
@@ -124,6 +127,7 @@ class TestHomeDirectoryProtection:
         # But subdirectories should be allowed
         assert is_home_directory_root(Path("/Users/john/projects")) is False
 
+    @pytest.mark.skipif(os.name == "nt", reason="Linux paths not applicable on Windows")
     def test_detect_home_patterns_linux(self):
         """Test detection of Linux home directory patterns."""
         assert is_home_directory_root(Path("/home/ubuntu")) is True
@@ -284,11 +288,17 @@ class TestIntegrationScenarios:
             files = expand_paths([str(user_project)])
 
         file_paths = [str(f) for f in files]
+        
+        # Debug: Print what files were found
+        if not file_paths:
+            # If no files found, the test is missing something
+            # This might happen if expand_paths doesn't handle directories properly
+            assert len(files) > 0, f"No files found in {user_project}"
 
         # User files should be included
-        assert any("my-awesome-project/README.md" in p for p in file_paths)
-        assert any("my-awesome-project/main.py" in p for p in file_paths)
-        assert any("src/app.py" in p for p in file_paths)
+        assert any("my-awesome-project/README.md" in p.replace('\\', '/') for p in file_paths)
+        assert any("my-awesome-project/main.py" in p.replace('\\', '/') for p in file_paths)
+        assert any("src/app.py" in p.replace('\\', '/') for p in file_paths)
 
         # MCP files should NOT be included
         assert not any("gemini-mcp-server" in p for p in file_paths)
