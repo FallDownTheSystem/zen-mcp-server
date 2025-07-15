@@ -234,45 +234,6 @@ class TestOpenAIProvider:
         assert provider.supports_thinking_mode("o4-mini") is False
         assert provider.supports_thinking_mode("mini") is False  # Test with alias too
 
-    @pytest.mark.skip("Test specific to OpenAI provider, not needed with LiteLLM")
-    @patch("providers.openai_compatible.OpenAI")
-    def test_o3_pro_routes_to_responses_endpoint(self, mock_openai_class):
-        """Test that o3-pro model routes to the /v1/responses endpoint (mock test)."""
-        # Set up mock for OpenAI client responses endpoint
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-
-        mock_response = MagicMock()
-        mock_response.output = MagicMock()
-        mock_response.output.content = [MagicMock()]
-        mock_response.output.content[0].type = "output_text"
-        mock_response.output.content[0].text = "4"
-        mock_response.model = "o3-pro-2025-06-10"
-        mock_response.id = "test-id"
-        mock_response.created_at = 1234567890
-        mock_response.usage = MagicMock()
-        mock_response.usage.prompt_tokens = 10
-        mock_response.usage.completion_tokens = 5
-        mock_response.usage.total_tokens = 15
-
-        mock_client.responses.create.return_value = mock_response
-
-        provider = OpenAIModelProvider("test-key")
-
-        # Generate content with o3-pro
-        result = provider.generate_content(prompt="What is 2 + 2?", model_name="o3-pro", temperature=1.0)
-
-        # Verify responses.create was called
-        mock_client.responses.create.assert_called_once()
-        call_args = mock_client.responses.create.call_args[1]
-        assert call_args["model"] == "o3-pro-2025-06-10"
-        assert call_args["input"][0]["role"] == "user"
-        assert "What is 2 + 2?" in call_args["input"][0]["content"][0]["text"]
-
-        # Verify the response
-        assert result.content == "4"
-        assert result.model_name == "o3-pro-2025-06-10"
-        assert result.metadata["endpoint"] == "responses"
 
     @patch("providers.openai_compatible.OpenAI")
     def test_o3_deep_research_routes_to_responses_endpoint(self, mock_openai_class):

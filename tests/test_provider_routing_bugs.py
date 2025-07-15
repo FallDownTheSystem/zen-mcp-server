@@ -47,71 +47,6 @@ class TestProviderRoutingBugs:
 
         utils.model_restrictions._restriction_service = None
 
-    @pytest.mark.skip("Test needs update for LiteLLM architecture")
-    @pytest.mark.no_mock_provider
-    def test_fallback_routing_bug_reproduction(self):
-        """
-        CRITICAL BUG TEST: Reproduce the bug where fallback logic auto-registers
-        Google provider for 'flash' model without checking GEMINI_API_KEY.
-
-        Scenario: User has only OPENROUTER_API_KEY, requests 'flash' model.
-        Bug: System incorrectly uses Google provider instead of OpenRouter.
-        """
-        # Save original environment
-        original_env = {}
-        for key in [
-            "GEMINI_API_KEY",
-            "OPENAI_API_KEY",
-            "XAI_API_KEY",
-            "OPENROUTER_API_KEY",
-            "OPENROUTER_ALLOWED_MODELS",
-        ]:
-            original_env[key] = os.environ.get(key)
-
-        try:
-            # Set up bug scenario: only OpenRouter API key
-            os.environ.pop("GEMINI_API_KEY", None)  # No Google API key
-            os.environ.pop("OPENAI_API_KEY", None)
-            os.environ.pop("XAI_API_KEY", None)
-            os.environ.pop("OPENROUTER_ALLOWED_MODELS", None)  # Clear any restrictions
-            os.environ["OPENROUTER_API_KEY"] = "test-openrouter-key"
-
-            # Register only OpenRouter provider (like in server.py:configure_providers)
-            from providers.openrouter import OpenRouterProvider
-
-            ModelProviderRegistry.register_provider(ProviderType.OPENROUTER, OpenRouterProvider)
-
-            # Create tool to test fallback logic
-            tool = ChatTool()
-
-            # Test: Request 'flash' model - should use OpenRouter, not auto-register Google
-            provider = tool.get_model_provider("flash")
-
-            # ASSERTION: Should get OpenRouter provider, not Google
-            assert provider is not None, "Should find a provider for 'flash' model"
-            assert provider.get_provider_type() == ProviderType.OPENROUTER, (
-                f"Expected OpenRouter provider for 'flash' model with only OPENROUTER_API_KEY set, "
-                f"but got {provider.get_provider_type()}"
-            )
-
-            # Test common aliases that should all route to OpenRouter
-            test_models = ["flash", "pro", "o3", "o3-mini", "o4-mini"]
-            for model_name in test_models:
-                provider = tool.get_model_provider(model_name)
-                assert provider is not None, f"Should find provider for '{model_name}'"
-                assert provider.get_provider_type() == ProviderType.OPENROUTER, (
-                    f"Model '{model_name}' should route to OpenRouter when only OPENROUTER_API_KEY is set, "
-                    f"but got {provider.get_provider_type()}"
-                )
-
-        finally:
-            # Restore original environment
-            for key, value in original_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
-
     @pytest.mark.no_mock_provider
     def test_fallback_should_not_register_without_api_key(self):
         """
@@ -164,62 +99,6 @@ class TestProviderRoutingBugs:
                 else:
                     os.environ[key] = value
 
-    @pytest.mark.skip("Test needs update for LiteLLM architecture")
-    @pytest.mark.no_mock_provider
-    def test_mixed_api_keys_correct_routing(self):
-        """
-        Test that when multiple API keys are available, provider routing works correctly.
-        """
-        # Save original environment
-        original_env = {}
-        for key in [
-            "GEMINI_API_KEY",
-            "OPENAI_API_KEY",
-            "XAI_API_KEY",
-            "OPENROUTER_API_KEY",
-            "OPENROUTER_ALLOWED_MODELS",
-        ]:
-            original_env[key] = os.environ.get(key)
-
-        try:
-            # Set up scenario: Multiple API keys available
-            os.environ["GEMINI_API_KEY"] = "test-gemini-key"
-            os.environ["OPENAI_API_KEY"] = "test-openai-key"
-            os.environ["OPENROUTER_API_KEY"] = "test-openrouter-key"
-            os.environ.pop("XAI_API_KEY", None)
-            os.environ.pop("OPENROUTER_ALLOWED_MODELS", None)  # Clear any restrictions
-
-            # Register providers in priority order (like server.py)
-            from providers.gemini import GeminiModelProvider
-            from providers.openai_provider import OpenAIModelProvider
-            from providers.openrouter import OpenRouterProvider
-
-            ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
-            ModelProviderRegistry.register_provider(ProviderType.OPENROUTER, OpenRouterProvider)
-
-            tool = ChatTool()
-
-            # Test priority order: Native APIs should be preferred over OpenRouter
-            # Google models should use Google provider
-            flash_provider = tool.get_model_provider("flash")
-            assert (
-                flash_provider.get_provider_type() == ProviderType.GOOGLE
-            ), "When both Google and OpenRouter API keys are available, 'flash' should prefer Google provider"
-
-            # OpenAI models should use OpenAI provider
-            o3_provider = tool.get_model_provider("o3")
-            assert (
-                o3_provider.get_provider_type() == ProviderType.OPENAI
-            ), "When both OpenAI and OpenRouter API keys are available, 'o3' should prefer OpenAI provider"
-
-        finally:
-            # Restore original environment
-            for key, value in original_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
 
 
 class TestOpenRouterAliasRestrictions:
