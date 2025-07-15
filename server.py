@@ -530,18 +530,26 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         3. Claude continues with codereview tool + continuation_id → full context preserved
         4. Multiple tools can collaborate using same thread ID
     """
-    logger.info(f"MCP tool call: {name}")
-    logger.debug(f"MCP tool arguments: {list(arguments.keys())}")
+    logger.info(f"[MCP_DEBUG] ENTRY: handle_call_tool called with tool={name}")
+    logger.info(f"[MCP_DEBUG] ENTRY: arguments keys={list(arguments.keys())}")
+    logger.debug(f"[MCP_DEBUG] ENTRY: full arguments={arguments}")
 
     # Log to activity file for monitoring
     try:
         mcp_activity_logger = logging.getLogger("mcp_activity")
         mcp_activity_logger.info(f"TOOL_CALL: {name} with {len(arguments)} arguments")
-    except Exception:
-        pass
+        logger.info("[MCP_DEBUG] Activity log written successfully")
+    except Exception as e:
+        logger.error(f"[MCP_DEBUG] Failed to write activity log: {e}")
+
+    logger.info("[MCP_DEBUG] About to check continuation_id in arguments")
+    logger.info(f"MCP tool call: {name}")
+    logger.debug(f"MCP tool arguments: {list(arguments.keys())}")
 
     # Handle thread context reconstruction if continuation_id is present
+    logger.info("[MCP_DEBUG] Checking for continuation_id")
     if "continuation_id" in arguments and arguments["continuation_id"]:
+        logger.info("[MCP_DEBUG] Found continuation_id, starting reconstruction")
         continuation_id = arguments["continuation_id"]
         logger.debug(f"Resuming conversation thread: {continuation_id}")
         logger.debug(
@@ -556,28 +564,39 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         except Exception:
             pass
 
+        logger.info("[MCP_DEBUG] About to call reconstruct_thread_context")
         arguments = await reconstruct_thread_context(arguments)
+        logger.info("[MCP_DEBUG] reconstruct_thread_context completed")
         logger.debug(f"[CONVERSATION_DEBUG] After thread reconstruction, arguments keys: {list(arguments.keys())}")
         if "_remaining_tokens" in arguments:
             logger.debug(f"[CONVERSATION_DEBUG] Remaining token budget: {arguments['_remaining_tokens']:,}")
+    else:
+        logger.info("[MCP_DEBUG] No continuation_id found, proceeding with fresh request")
 
     # Route to AI-powered tools that require Gemini API calls
+    logger.info(f"[MCP_DEBUG] Checking if tool '{name}' exists in TOOLS registry")
+    logger.info(f"[MCP_DEBUG] Available tools: {list(TOOLS.keys())}")
     if name in TOOLS:
+        logger.info(f"[MCP_DEBUG] Tool '{name}' found in registry, executing")
         logger.info(f"Executing tool '{name}' with {len(arguments)} parameter(s)")
         tool = TOOLS[name]
 
         # EARLY MODEL RESOLUTION AT MCP BOUNDARY
         # Resolve model before passing to tool - this ensures consistent model handling
         # NOTE: Consensus tool is exempt as it handles multiple models internally
+        logger.info(f"[MCP_DEBUG] Starting model resolution for tool '{name}'")
+
         from providers.registry import ModelProviderRegistry
         from utils.file_utils import check_total_file_size
         from utils.model_context import ModelContext
 
         # Get model from arguments or use default
         model_name = arguments.get("model") or DEFAULT_MODEL
+        logger.info(f"[MCP_DEBUG] Initial model for {name}: {model_name}")
         logger.debug(f"Initial model for {name}: {model_name}")
 
         # Parse model:option format if present
+        logger.info("[MCP_DEBUG] Parsing model format")
         model_name, model_option = parse_model_option(model_name)
         if model_option:
             logger.debug(f"Parsed model format - model: '{model_name}', option: '{model_option}'")
@@ -586,7 +605,9 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         # No special handling needed at server level
 
         # Skip model resolution for tools that don't require models (e.g., planner)
+        logger.info("[MCP_DEBUG] Checking if tool requires model")
         if not tool.requires_model():
+            logger.info(f"[MCP_DEBUG] Tool {name} doesn't require model, executing directly")
             logger.debug(f"Tool {name} doesn't require model resolution - skipping model validation")
             # Execute tool directly without model context
             return await tool.execute(arguments)
@@ -643,15 +664,27 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
                 return [TextContent(type="text", text=ToolOutput(**file_size_check).model_dump_json())]
 
         # Execute tool with pre-resolved model context
-        result = await tool.execute(arguments)
-        logger.info(f"Tool '{name}' execution completed")
+        logger.info(f"[MCP_DEBUG] About to execute tool '{name}' with resolved model '{model_name}'")
+        logger.info(f"[MCP_DEBUG] Tool execution arguments keys: {list(arguments.keys())}")
+
+        try:
+            result = await tool.execute(arguments)
+            logger.info(f"[MCP_DEBUG] Tool '{name}' execution completed successfully")
+            logger.info(f"Tool '{name}' execution completed")
+        except Exception as e:
+            logger.error(f"[MCP_DEBUG] Tool '{name}' execution failed with error: {e}")
+            logger.error(f"[MCP_DEBUG] Error type: {type(e)}")
+            raise
 
         # Log completion to activity file
         try:
             mcp_activity_logger = logging.getLogger("mcp_activity")
             mcp_activity_logger.info(f"TOOL_COMPLETED: {name}")
-        except Exception:
-            pass
+            logger.info("[MCP_DEBUG] Activity log completion written")
+        except Exception as e:
+            logger.error(f"[MCP_DEBUG] Failed to write completion log: {e}")
+
+        logger.info(f"[MCP_DEBUG] Returning result from tool '{name}'")
         return result
 
     # Handle unknown tool requests gracefully
@@ -1137,8 +1170,12 @@ async def main():
     The server communicates via standard input/output streams using the
     MCP protocol's JSON-RPC message format.
     """
+    logger.info("[MCP_DEBUG] Starting main() function")
+
     # Validate and configure providers based on available API keys
+    logger.info("[MCP_DEBUG] Configuring providers")
     configure_providers()
+    logger.info("[MCP_DEBUG] Providers configured successfully")
 
     # Log startup message
     logger.info("Zen MCP Server starting up...")
@@ -1148,6 +1185,7 @@ async def main():
     # (when handle_list_tools is called)
 
     # Log current model mode
+    logger.info("[MCP_DEBUG] Loading configuration")
     from config import IS_AUTO_MODE
 
     if IS_AUTO_MODE:
@@ -1162,7 +1200,9 @@ async def main():
 
     # Run the server using stdio transport (standard input/output)
     # This allows the server to be launched by MCP clients as a subprocess
+    logger.info("[MCP_DEBUG] Starting stdio server")
     async with stdio_server() as (read_stream, write_stream):
+        logger.info("[MCP_DEBUG] stdio server started, running MCP server")
         await server.run(
             read_stream,
             write_stream,

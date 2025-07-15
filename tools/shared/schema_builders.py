@@ -24,10 +24,11 @@ class SchemaBuilder:
             "minimum": 0.0,
             "maximum": 1.0,
         },
-        "thinking_mode": {
+        "reasoning_effort": {
             "type": "string",
-            "enum": ["minimal", "low", "medium", "high", "max"],
-            "description": COMMON_FIELD_DESCRIPTIONS["thinking_mode"],
+            "enum": ["disable", "low", "medium", "high"],
+            "description": COMMON_FIELD_DESCRIPTIONS["reasoning_effort"],
+            "default": "high",
         },
         "use_websearch": {
             "type": "boolean",
@@ -75,7 +76,7 @@ class SchemaBuilder:
         """
         properties = {}
 
-        # Add common fields (temperature, thinking_mode, etc.)
+        # Add common fields (temperature, reasoning_effort, etc.)
         properties.update(SchemaBuilder.COMMON_FIELD_SCHEMAS)
 
         # Add simple tool-specific fields (files field for simple tools)

@@ -138,7 +138,7 @@ class SimpleTool(BaseTool):
 
         This method automatically combines:
         - Tool-specific fields from get_tool_fields()
-        - Common fields (temperature, thinking_mode, etc.)
+        - Common fields (temperature, reasoning_effort, etc.)
         - Model field with proper auto-mode handling
         - Required fields from get_required_fields()
 
@@ -220,10 +220,10 @@ class SimpleTool(BaseTool):
             temperature = self.get_default_temperature()
         return self.validate_and_correct_temperature(temperature, model_context)
 
-    def get_request_thinking_mode(self, request) -> Optional[str]:
-        """Get thinking_mode from request. Override for custom thinking mode handling."""
+    def get_request_reasoning_effort(self, request) -> Optional[str]:
+        """Get reasoning_effort from request. Override for custom reasoning effort handling."""
         try:
-            return request.thinking_mode
+            return request.reasoning_effort
         except AttributeError:
             return None
 
@@ -404,9 +404,9 @@ class SimpleTool(BaseTool):
             for warning in temp_warnings:
                 # Get thinking mode with defaults
                 logger.warning(warning)
-            thinking_mode = self.get_request_thinking_mode(request)
-            if thinking_mode is None:
-                thinking_mode = self.get_default_thinking_mode()
+            reasoning_effort = self.get_request_reasoning_effort(request)
+            if reasoning_effort is None:
+                reasoning_effort = "high"  # Default to high reasoning effort
 
             # Get the provider from model context (clean OOP - no re-fetching)
             provider = self._model_context.provider
@@ -437,7 +437,7 @@ class SimpleTool(BaseTool):
                 model_name=self._current_model_name,
                 system_prompt=system_prompt,
                 temperature=temperature,
-                thinking_mode=thinking_mode if provider.supports_thinking_mode(self._current_model_name) else None,
+                reasoning_effort=reasoning_effort,
                 images=images if images else None,
             )
             end_time = time.time()

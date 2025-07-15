@@ -180,7 +180,7 @@ class TestChatRequestModel:
         # Should have inherited fields
         assert hasattr(request, "model")
         assert hasattr(request, "temperature")
-        assert hasattr(request, "thinking_mode")
+        assert hasattr(request, "reasoning_effort")
         assert hasattr(request, "use_websearch")
         assert hasattr(request, "continuation_id")
         assert hasattr(request, "images")  # From base model too

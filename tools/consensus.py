@@ -74,6 +74,10 @@ class ConsensusRequest(ToolRequest):
         le=1.0,
         description="Temperature for response (0.0 to 1.0). Default: 0.2 for analytical/focused responses.",
     )
+    reasoning_effort: str | None = Field(
+        "high",
+        description="Control reasoning depth - disable/low/medium/high (Gemini, O3, Anthropic Claude models only)",
+    )
 
     @model_validator(mode="after")
     def validate_consensus_requirements(self):
@@ -514,7 +518,7 @@ class ConsensusTool(SimpleTool):
                 model_name=model_name,
                 system_prompt=system_prompt,
                 temperature=request.temperature if request.temperature is not None else 0.2,
-                thinking_mode="medium",
+                reasoning_effort=request.reasoning_effort if request.reasoning_effort else "high",
                 images=request.images if request.images else None,
                 timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )
@@ -576,7 +580,7 @@ class ConsensusTool(SimpleTool):
                 model_name=model_name,
                 system_prompt=system_prompt,
                 temperature=request.temperature if request.temperature is not None else 0.2,
-                thinking_mode="medium",
+                reasoning_effort=request.reasoning_effort if request.reasoning_effort else "high",
                 images=request.images if request.images else None,
                 timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )
