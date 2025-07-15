@@ -35,7 +35,7 @@ class TestLiteLLMIntegrationSmoke:
         # For Gemini models, use the full model path to ensure correct routing
         if model.startswith("gemini"):
             model = f"gemini/{model}"
-        
+
         # Make a very simple, cheap request
         response = provider.generate_content(
             prompt="Reply with just 'OK'", model_name=model, temperature=0, max_output_tokens=10
@@ -58,7 +58,7 @@ class TestLiteLLMIntegrationSmoke:
         # For Gemini models, use the full model path to ensure correct routing
         if model.startswith("gemini"):
             model = f"gemini/{model}"
-        
+
         # Make async request
         response = await provider.agenerate_content(
             prompt="Reply with just 'YES'", model_name=model, temperature=0, max_output_tokens=10
@@ -86,7 +86,7 @@ class TestLiteLLMIntegrationSmoke:
         # For Gemini models, use the full model path to ensure correct routing
         if model.startswith("gemini"):
             model = f"gemini/{model}"
-        
+
         # Count tokens for a known string
         text = "Hello, world! This is a test."
         count = provider.count_tokens(text, model)
@@ -166,7 +166,7 @@ class TestLiteLLMIntegrationSmoke:
         # For Gemini models, use the full model path to ensure correct routing
         if model.startswith("gemini"):
             model = f"gemini/{model}"
-        
+
         # Streaming is not implemented in the wrapper
         response = provider.generate_content(prompt="Test", model_name=model, stream=True, max_output_tokens=10)
 

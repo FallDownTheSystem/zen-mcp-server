@@ -40,7 +40,7 @@ class TestLiteLLMConsensusTimeout:
             os.environ["CONSENSUS_MODEL_TIMEOUT"] = "300"
 
             # Execute consensus with multiple models
-            result = await tool.execute(
+            await tool.execute(
                 {
                     "prompt": "Test question",
                     "models": [
@@ -55,7 +55,7 @@ class TestLiteLLMConsensusTimeout:
             assert len(generate_calls) == 2
 
             # Check each call
-            for args, kwargs in generate_calls:
+            for _args, kwargs in generate_calls:
                 assert "timeout" in kwargs
                 assert kwargs["timeout"] == 300.0
 
@@ -85,7 +85,8 @@ class TestLiteLLMConsensusTimeout:
 
             # The result should be valid JSON
             import json
-            output = json.loads(result[0].text)
+
+            json.loads(result[0].text)
 
             # Verify custom timeout was used
             assert mock_provider.generate_content.called

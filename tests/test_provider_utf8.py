@@ -37,9 +37,6 @@ class TestProviderUTF8Encoding(unittest.TestCase):
         self.assertIsInstance(tokens, int)
         self.assertGreater(tokens, 0)
 
-
-
-
     def test_provider_type_enum_utf8_safe(self):
         """Test that ProviderType enum is UTF-8 safe."""
         # Test all provider types
@@ -161,7 +158,6 @@ class TestProviderUTF8Encoding(unittest.TestCase):
         self.assertEqual(parsed["description"], provider_data["description"])
 
 
-
 class DummyToolForLocaleTest:
     """Utility class to test language instruction generation."""
 
@@ -213,7 +209,7 @@ class TestLocaleModelIntegration(unittest.TestCase):
 
     def test_model_name_resolution_utf8(self):
         """Test model name resolution with UTF-8."""
-        provider = LiteLLMProvider()
+        LiteLLMProvider()
         model_names = ["gpt-4", "gemini-2.5-flash", "claude-3-opus", "o3-pro-2025-06-10"]
         for model_name in model_names:
             # LiteLLM doesn't have _resolve_model_name method, so just test the model name

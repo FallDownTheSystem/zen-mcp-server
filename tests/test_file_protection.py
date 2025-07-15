@@ -296,9 +296,9 @@ class TestIntegrationScenarios:
             assert len(files) > 0, f"No files found in {user_project}"
 
         # User files should be included
-        assert any("my-awesome-project/README.md" in p.replace('\\', '/') for p in file_paths)
-        assert any("my-awesome-project/main.py" in p.replace('\\', '/') for p in file_paths)
-        assert any("src/app.py" in p.replace('\\', '/') for p in file_paths)
+        assert any("my-awesome-project/README.md" in p.replace("\\", "/") for p in file_paths)
+        assert any("my-awesome-project/main.py" in p.replace("\\", "/") for p in file_paths)
+        assert any("src/app.py" in p.replace("\\", "/") for p in file_paths)
 
         # MCP files should NOT be included
         assert not any("gemini-mcp-server" in p for p in file_paths)
