@@ -155,6 +155,15 @@ class LiteLLMProvider(ModelProvider):
         # Enable drop_params globally to handle model-specific restrictions
         litellm.drop_params = True
 
+        # Set timeout configuration to prevent hanging
+        # These will be used as defaults if not specified in the request
+        litellm.request_timeout = 600  # 10 minutes default
+        litellm.connect_timeout = 30  # 30 seconds to establish connection
+
+        # Also set environment variables for some providers that use them
+        os.environ["LITELLM_REQUEST_TIMEOUT"] = "600"
+        os.environ["LITELLM_CONNECT_TIMEOUT"] = "30"
+
         # Get model metadata (if provided, or load from file)
         self.model_metadata = kwargs.get("model_metadata", {})
 
@@ -177,6 +186,69 @@ class LiteLLMProvider(ModelProvider):
 
         # Configure observability callbacks
         self._configure_observability()
+
+        # Build model alias mapping
+        self.model_alias_map = self._build_alias_map()
+
+    def _build_alias_map(self) -> dict[str, str]:
+        """Build a mapping of model aliases to actual model names from litellm_config.yaml."""
+        alias_map = {}
+
+        config_path = self._find_yaml_file("litellm_config.yaml")
+        if config_path:
+            try:
+                import yaml
+
+                with open(config_path) as f:
+                    config = yaml.safe_load(f)
+                    if config and "model_list" in config:
+                        for model_config in config["model_list"]:
+                            model_name = model_config.get("model_name")
+                            if not model_name:
+                                continue
+
+                            # Get the actual model path from litellm_params
+                            litellm_params = model_config.get("litellm_params", {})
+                            actual_model = litellm_params.get("model")
+                            if not actual_model:
+                                continue
+
+                            # Map model_name to actual model path
+                            # Only add if they're different (model_name is an alias)
+                            if model_name != actual_model:
+                                alias_map[model_name] = actual_model
+
+                            # Also map any additional aliases
+                            aliases = model_config.get("model_alias", [])
+                            if isinstance(aliases, list):
+                                for alias in aliases:
+                                    alias_map[alias] = actual_model
+                            elif isinstance(aliases, str):
+                                alias_map[aliases] = actual_model
+
+                logger.debug(f"Built alias map with {len(alias_map)} aliases")
+            except Exception as e:
+                logger.warning(f"Failed to build alias map from {config_path}: {e}")
+
+        return alias_map
+
+    def _resolve_model_alias(self, model_name: str) -> str:
+        """Resolve a model alias to the actual model name.
+
+        Args:
+            model_name: The model name or alias to resolve
+
+        Returns:
+            The actual model name to use with LiteLLM
+        """
+        # Check if it's an alias
+        if model_name in self.model_alias_map:
+            resolved = self.model_alias_map[model_name]
+            logger.debug(f"Resolved model alias '{model_name}' to '{resolved}'")
+            return resolved
+
+        # Not an alias, return as-is
+        return model_name
 
     def _configure_observability(self):
         """Configure LiteLLM observability callbacks."""
@@ -215,9 +287,24 @@ class LiteLLMProvider(ModelProvider):
         Returns default capabilities as LiteLLM handles model-specific
         behavior internally.
         """
-        # Check if we have metadata for this model
+        # Resolve any aliases first
+        resolved_model = self._resolve_model_alias(model_name)
+
+        # Check if we have metadata for this model (try both alias and resolved name)
+        metadata = None
         if model_name in self.model_metadata:
             metadata = self.model_metadata[model_name]
+        elif resolved_model in self.model_metadata:
+            # Check the resolved model name in metadata
+            metadata = self.model_metadata[resolved_model]
+            # Also check just the model name without provider prefix
+            # e.g., "gemini/gemini-2.5-pro" -> "gemini-2.5-pro"
+        elif "/" in resolved_model:
+            base_model = resolved_model.split("/", 1)[1]
+            if base_model in self.model_metadata:
+                metadata = self.model_metadata[base_model]
+
+        if metadata:
             return ModelCapabilities(
                 provider=ProviderType.CUSTOM,
                 model_name=model_name,
@@ -255,8 +342,19 @@ class LiteLLMProvider(ModelProvider):
 
     def supports_thinking_mode(self, model_name: str) -> bool:
         """Check if the model supports extended thinking mode."""
+        # Resolve any aliases first
+        resolved_model = self._resolve_model_alias(model_name)
+
+        # Check metadata with same logic as get_capabilities
         if model_name in self.model_metadata:
             return self.model_metadata[model_name].get("supports_extended_thinking", False)
+        elif resolved_model in self.model_metadata:
+            return self.model_metadata[resolved_model].get("supports_extended_thinking", False)
+        elif "/" in resolved_model:
+            base_model = resolved_model.split("/", 1)[1]
+            if base_model in self.model_metadata:
+                return self.model_metadata[base_model].get("supports_extended_thinking", False)
+
         # Check for known thinking models
         return "o3" in model_name.lower() or "o4" in model_name.lower()
 
@@ -266,8 +364,10 @@ class LiteLLMProvider(ModelProvider):
         Uses LiteLLM's token counting functionality.
         """
         try:
+            # Resolve model alias to actual model name
+            resolved_model = self._resolve_model_alias(model_name)
             # LiteLLM provides token counting
-            return litellm.token_counter(model=model_name, text=text)
+            return litellm.token_counter(model=resolved_model, text=text)
         except Exception as e:
             logger.debug(f"Token counting failed for {model_name}: {e}")
             # Fallback to simple estimation (4 chars per token)
@@ -323,9 +423,12 @@ class LiteLLMProvider(ModelProvider):
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
                             )
 
+            # Resolve model alias to actual model name
+            resolved_model = self._resolve_model_alias(model_name)
+
             # Build completion kwargs
             completion_kwargs = {
-                "model": model_name,
+                "model": resolved_model,
                 "messages": messages,
                 "temperature": temperature,
             }
@@ -479,9 +582,12 @@ class LiteLLMProvider(ModelProvider):
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
                             )
 
+            # Resolve model alias to actual model name
+            resolved_model = self._resolve_model_alias(model_name)
+
             # Build completion kwargs
             completion_kwargs = {
-                "model": model_name,
+                "model": resolved_model,
                 "messages": messages,
                 "temperature": temperature,
             }

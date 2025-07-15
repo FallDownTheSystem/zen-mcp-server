@@ -109,7 +109,8 @@ class TestLiteLLMProvider:
         assert provider.supports_thinking_mode("o3-mini") is False
         assert provider.supports_thinking_mode("o4-mini") is False
         assert provider.supports_thinking_mode("gpt-4") is False
-        assert provider.supports_thinking_mode("gemini-pro") is False
+        # Note: gemini-pro is an alias for gemini-2.5-pro which DOES support thinking
+        assert provider.supports_thinking_mode("gemini-pro") is True
 
     @patch("providers.litellm_provider.litellm.token_counter")
     def test_count_tokens_success(self, mock_token_counter):
