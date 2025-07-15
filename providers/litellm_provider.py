@@ -74,6 +74,7 @@ class LiteLLMProvider(ModelProvider):
 
             if enable_observability:
                 from observability.callbacks import configure_litellm_callbacks
+
                 configure_litellm_callbacks(enable_observability=True)
                 logger.info("LiteLLM observability callbacks configured")
             else:
@@ -234,20 +235,22 @@ class LiteLLMProvider(ModelProvider):
             response = completion(**completion_kwargs)
 
             # Handle streaming response (not fully implemented, convert to regular response)
-            if hasattr(response, '__iter__') and not hasattr(response, 'choices'):
+            if hasattr(response, "__iter__") and not hasattr(response, "choices"):
                 # This is a streaming response - consume it and convert to regular response
-                logger.warning(f"Streaming requested but not fully implemented for model {model_name}, converting to regular response")
+                logger.warning(
+                    f"Streaming requested but not fully implemented for model {model_name}, converting to regular response"
+                )
                 content_chunks = []
                 for chunk in response:
-                    if hasattr(chunk, 'choices') and chunk.choices:
-                        if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                    if hasattr(chunk, "choices") and chunk.choices:
+                        if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
                             if chunk.choices[0].delta.content:
                                 content_chunks.append(chunk.choices[0].delta.content)
-                content = ''.join(content_chunks)
-                
+                content = "".join(content_chunks)
+
                 # For streaming, we don't have usage info typically
                 usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-                
+
                 # Return early for streaming
                 return ModelResponse(
                     content=content,
@@ -260,7 +263,7 @@ class LiteLLMProvider(ModelProvider):
 
             # Extract response content
             content = response.choices[0].message.content
-            
+
             # Debug: Log the response structure if content is None
             if content is None:
                 logger.warning(f"LiteLLM response content is None for model {model_name}")
@@ -504,7 +507,7 @@ class LiteLLMProvider(ModelProvider):
         try:
             # Find the ZenObservabilityHandler in the callbacks
             for callback in litellm.callbacks:
-                if hasattr(callback, 'get_stats'):
+                if hasattr(callback, "get_stats"):
                     return callback.get_stats()
             return {"error": "No observability handler found"}
         except Exception as e:

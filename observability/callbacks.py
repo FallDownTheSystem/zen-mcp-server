@@ -27,20 +27,19 @@ class SecureLogger:
     # Patterns to identify and redact sensitive information
     PII_PATTERNS = [
         # Email addresses
-        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]'),
+        (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL]"),
         # Phone numbers (various formats)
-        (r'\b\d{3}-\d{3}-\d{4}\b', '[PHONE]'),
-        (r'\b\(\d{3}\)\s*\d{3}-\d{4}\b', '[PHONE]'),
+        (r"\b\d{3}-\d{3}-\d{4}\b", "[PHONE]"),
+        (r"\b\(\d{3}\)\s*\d{3}-\d{4}\b", "[PHONE]"),
         # Social security numbers
-        (r'\b\d{3}-\d{2}-\d{4}\b', '[SSN]'),
+        (r"\b\d{3}-\d{2}-\d{4}\b", "[SSN]"),
         # Credit card numbers (simple pattern)
-        (r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b', '[CARD]'),
+        (r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b", "[CARD]"),
         # API keys (common patterns)
-        (r'\b(sk-[a-zA-Z0-9]{48})\b', '[API_KEY]'),
-        (r'\b(sk-[a-zA-Z0-9-]{20,})\b', '[API_KEY]'),
+        (r"\b(sk-[a-zA-Z0-9]{48})\b", "[API_KEY]"),
+        (r"\b(sk-[a-zA-Z0-9-]{20,})\b", "[API_KEY]"),
         # Generic secrets
-        (r'\b(secret|password|token|key)[\s]*[=:][\s]*[\'"]?([^\s\'"]+)[\'"]?\b',
-         lambda m: f'{m.group(1)}=[REDACTED]'),
+        (r'\b(secret|password|token|key)[\s]*[=:][\s]*[\'"]?([^\s\'"]+)[\'"]?\b', lambda m: f"{m.group(1)}=[REDACTED]"),
     ]
 
     @classmethod
@@ -101,11 +100,11 @@ class CostTracker:
 
             # Extract usage information
             usage = {}
-            if hasattr(response_obj, 'usage') and response_obj.usage:
+            if hasattr(response_obj, "usage") and response_obj.usage:
                 usage = {
-                    "input_tokens": getattr(response_obj.usage, 'prompt_tokens', 0),
-                    "output_tokens": getattr(response_obj.usage, 'completion_tokens', 0),
-                    "total_tokens": getattr(response_obj.usage, 'total_tokens', 0),
+                    "input_tokens": getattr(response_obj.usage, "prompt_tokens", 0),
+                    "output_tokens": getattr(response_obj.usage, "completion_tokens", 0),
+                    "total_tokens": getattr(response_obj.usage, "total_tokens", 0),
                 }
 
             # Log cost information
@@ -199,8 +198,10 @@ class ZenObservabilityHandler(CustomLogger):
             # Detailed logging if enabled
             if self.log_requests:
                 safe_messages = [
-                    {"role": msg.get("role", "unknown"),
-                     "content": SecureLogger.safe_log_content(msg.get("content", ""), 200)}
+                    {
+                        "role": msg.get("role", "unknown"),
+                        "content": SecureLogger.safe_log_content(msg.get("content", ""), 200),
+                    }
                     for msg in messages[-2:]  # Only log last 2 messages
                 ]
                 self.logger.debug(f"REQUEST: model={model} messages={safe_messages}")
@@ -208,8 +209,7 @@ class ZenObservabilityHandler(CustomLogger):
         except Exception as e:
             self.logger.warning(f"Pre-API call logging failed: {e}")
 
-    def log_post_api_call(self, kwargs: dict[str, Any], response_obj: Any,
-                         start_time: float, end_time: float) -> None:
+    def log_post_api_call(self, kwargs: dict[str, Any], response_obj: Any, start_time: float, end_time: float) -> None:
         """Log information after API call."""
         try:
             model_name = kwargs.get("model", "unknown")
@@ -223,8 +223,7 @@ class ZenObservabilityHandler(CustomLogger):
         except Exception as e:
             self.logger.warning(f"Post-API call logging failed: {e}")
 
-    def log_success_event(self, kwargs: dict[str, Any], response_obj: Any,
-                         start_time: float, end_time: float) -> None:
+    def log_success_event(self, kwargs: dict[str, Any], response_obj: Any, start_time: float, end_time: float) -> None:
         """Log successful API call."""
         try:
             model_name = kwargs.get("model", "unknown")
@@ -236,7 +235,7 @@ class ZenObservabilityHandler(CustomLogger):
             self.cost_tracker.track_cost(kwargs, response_obj)
 
             # Log response if enabled
-            if self.log_responses and hasattr(response_obj, 'choices') and response_obj.choices:
+            if self.log_responses and hasattr(response_obj, "choices") and response_obj.choices:
                 content = response_obj.choices[0].message.content
                 safe_content = SecureLogger.safe_log_content(content, 300)
                 self.logger.debug(f"RESPONSE: model={model_name} content={safe_content}")
@@ -244,8 +243,7 @@ class ZenObservabilityHandler(CustomLogger):
         except Exception as e:
             self.logger.warning(f"Success event logging failed: {e}")
 
-    def log_failure_event(self, kwargs: dict[str, Any], response_obj: Any,
-                         start_time: float, end_time: float) -> None:
+    def log_failure_event(self, kwargs: dict[str, Any], response_obj: Any, start_time: float, end_time: float) -> None:
         """Log failed API call."""
         try:
             model_name = kwargs.get("model", "unknown")
@@ -265,13 +263,15 @@ class ZenObservabilityHandler(CustomLogger):
             self.logger.warning(f"Failure event logging failed: {e}")
 
     # Async versions for async API calls
-    async def async_log_success_event(self, kwargs: dict[str, Any], response_obj: Any,
-                                    start_time: float, end_time: float) -> None:
+    async def async_log_success_event(
+        self, kwargs: dict[str, Any], response_obj: Any, start_time: float, end_time: float
+    ) -> None:
         """Async version of log_success_event."""
         self.log_success_event(kwargs, response_obj, start_time, end_time)
 
-    async def async_log_failure_event(self, kwargs: dict[str, Any], response_obj: Any,
-                                    start_time: float, end_time: float) -> None:
+    async def async_log_failure_event(
+        self, kwargs: dict[str, Any], response_obj: Any, start_time: float, end_time: float
+    ) -> None:
         """Async version of log_failure_event."""
         self.log_failure_event(kwargs, response_obj, start_time, end_time)
 
