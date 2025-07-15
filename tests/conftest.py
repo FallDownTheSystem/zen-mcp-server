@@ -52,16 +52,7 @@ from providers.litellm_provider import LiteLLMProvider  # noqa: E402
 ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
 # Register CUSTOM provider if CUSTOM_API_URL is available (for integration tests)
-# But only if we're actually running integration tests, not unit tests
-if os.getenv("CUSTOM_API_URL") and "test_prompt_regression.py" in os.getenv("PYTEST_CURRENT_TEST", ""):
-    from providers.custom import CustomProvider  # noqa: E402
-
-    def custom_provider_factory(api_key=None):
-        """Factory function that creates CustomProvider with proper parameters."""
-        base_url = os.getenv("CUSTOM_API_URL", "")
-        return CustomProvider(api_key=api_key or "", base_url=base_url)
-
-    ModelProviderRegistry.register_provider(ProviderType.CUSTOM, custom_provider_factory)
+# Legacy custom provider removed - all models now use LiteLLMProvider via server.py configuration
 
 
 @pytest.fixture
@@ -108,19 +99,7 @@ def mock_provider_availability(request, monkeypatch):
     if ProviderType.CUSTOM not in registry._providers:
         ModelProviderRegistry.register_provider(ProviderType.CUSTOM, LiteLLMProvider)
 
-    # Ensure CUSTOM provider is registered if needed for integration tests
-    if (
-        os.getenv("CUSTOM_API_URL")
-        and "test_prompt_regression.py" in os.getenv("PYTEST_CURRENT_TEST", "")
-        and ProviderType.CUSTOM not in registry._providers
-    ):
-        from providers.custom import CustomProvider
-
-        def custom_provider_factory(api_key=None):
-            base_url = os.getenv("CUSTOM_API_URL", "")
-            return CustomProvider(api_key=api_key or "", base_url=base_url)
-
-        ModelProviderRegistry.register_provider(ProviderType.CUSTOM, custom_provider_factory)
+    # Legacy custom provider removed - all models now use LiteLLMProvider
 
     from unittest.mock import MagicMock
 

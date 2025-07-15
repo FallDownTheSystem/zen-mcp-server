@@ -79,19 +79,7 @@ class BaseTool(ABC):
     4. Register the tool in server.py's TOOLS dictionary
     """
 
-    # Class-level cache for OpenRouter registry to avoid multiple loads
-    _openrouter_registry_cache = None
-
-    @classmethod
-    def _get_openrouter_registry(cls):
-        """Get cached OpenRouter registry instance, creating if needed."""
-        # Use BaseTool class directly to ensure cache is shared across all subclasses
-        if BaseTool._openrouter_registry_cache is None:
-            from providers.openrouter_registry import OpenRouterModelRegistry
-
-            BaseTool._openrouter_registry_cache = OpenRouterModelRegistry()
-            logger.debug("Created cached OpenRouter registry instance")
-        return BaseTool._openrouter_registry_cache
+    # Legacy OpenRouter registry removed - all models now handled by LiteLLM
 
     def __init__(self):
         # Cache tool metadata at initialization to avoid repeated calls
@@ -247,36 +235,9 @@ class BaseTool(ABC):
         # Get models from enabled providers only (those with valid API keys)
         all_models = ModelProviderRegistry.get_available_model_names()
 
-        # Add OpenRouter models if OpenRouter is configured
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
-        if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
-            try:
-                registry = self._get_openrouter_registry()
-                # Add all aliases from the registry (includes OpenRouter cloud models)
-                for alias in registry.list_aliases():
-                    if alias not in all_models:
-                        all_models.append(alias)
-            except Exception as e:
-                import logging
+        # OpenRouter models are now handled by LiteLLM configuration
 
-                logging.debug(f"Failed to add OpenRouter models to enum: {e}")
-
-        # Add custom models if custom API is configured
-        custom_url = os.getenv("CUSTOM_API_URL")
-        if custom_url:
-            try:
-                registry = self._get_openrouter_registry()
-                # Find all custom models (is_custom=true)
-                for alias in registry.list_aliases():
-                    config = registry.resolve(alias)
-                    # Check if this is a custom model that requires custom endpoints
-                    if config and config.is_custom:
-                        if alias not in all_models:
-                            all_models.append(alias)
-            except Exception as e:
-                import logging
-
-                logging.debug(f"Failed to add custom models to enum: {e}")
+        # Custom models are now handled by LiteLLM configuration
 
         # Remove duplicates while preserving order
         seen = set()
@@ -352,87 +313,16 @@ class BaseTool(ABC):
                             # Skip models without descriptions
                             continue
 
-            # Add custom models if custom API is configured
+            # Custom models are now handled by LiteLLM configuration
             custom_url = os.getenv("CUSTOM_API_URL")
             if custom_url:
-                # Load custom models from registry
-                try:
-                    registry = self._get_openrouter_registry()
-                    model_desc_parts.append(f"\nCustom models via {custom_url}:")
-
-                    # Find all custom models (is_custom=true)
-                    for alias in registry.list_aliases():
-                        config = registry.resolve(alias)
-                        # Check if this is a custom model that requires custom endpoints
-                        if config and config.is_custom:
-                            # Format context window
-                            context_tokens = config.context_window
-                            if context_tokens >= 1_000_000:
-                                context_str = f"{context_tokens // 1_000_000}M"
-                            elif context_tokens >= 1_000:
-                                context_str = f"{context_tokens // 1_000}K"
-                            else:
-                                context_str = str(context_tokens)
-
-                            desc_line = f"- '{alias}' ({context_str} context): {config.description}"
-                            if desc_line not in model_desc_parts:  # Avoid duplicates
-                                model_desc_parts.append(desc_line)
-                except Exception as e:
-                    import logging
-
-                    logging.debug(f"Failed to load custom model descriptions: {e}")
-                    model_desc_parts.append(f"\nCustom models: Models available via {custom_url}")
+                model_desc_parts.append(f"\nCustom models: Models available via {custom_url}")
 
             if has_openrouter:
-                # Add OpenRouter models with descriptions
-                try:
-                    import logging
-
-                    registry = self._get_openrouter_registry()
-
-                    # Group models by their model_name to avoid duplicates
-                    seen_models = set()
-                    model_configs = []
-
-                    for alias in registry.list_aliases():
-                        config = registry.resolve(alias)
-                        if config and config.model_name not in seen_models:
-                            seen_models.add(config.model_name)
-                            model_configs.append((alias, config))
-
-                    # Sort by context window (descending) then by alias
-                    model_configs.sort(key=lambda x: (-x[1].context_window, x[0]))
-
-                    if model_configs:
-                        model_desc_parts.append("\nOpenRouter models (use these aliases):")
-                        for alias, config in model_configs:  # Show ALL models so Claude can choose
-                            # Format context window in human-readable form
-                            context_tokens = config.context_window
-                            if context_tokens >= 1_000_000:
-                                context_str = f"{context_tokens // 1_000_000}M"
-                            elif context_tokens >= 1_000:
-                                context_str = f"{context_tokens // 1_000}K"
-                            else:
-                                context_str = str(context_tokens)
-
-                            # Build description line
-                            if config.description:
-                                desc = f"- '{alias}' ({context_str} context): {config.description}"
-                            else:
-                                # Fallback to showing the model name if no description
-                                desc = f"- '{alias}' ({context_str} context): {config.model_name}"
-                            model_desc_parts.append(desc)
-
-                        # Show all models - no truncation needed
-                except Exception as e:
-                    # Log for debugging but don't fail
-                    import logging
-
-                    logging.debug(f"Failed to load OpenRouter model descriptions: {e}")
-                    # Fallback to simple message
-                    model_desc_parts.append(
-                        "\nOpenRouter models: If configured, you can also use ANY model available on OpenRouter."
-                    )
+                # OpenRouter models are now handled by LiteLLM configuration
+                model_desc_parts.append(
+                    "\nOpenRouter models: If configured, you can also use ANY model available on OpenRouter."
+                )
 
             # Get all available models for the enum
             all_models = self._get_available_models()
@@ -449,24 +339,11 @@ class BaseTool(ABC):
 
             description = f"Model to use. Native models: {models_str}."
             if has_openrouter:
-                # Add OpenRouter aliases
-                try:
-                    registry = self._get_openrouter_registry()
-                    aliases = registry.list_aliases()
-
-                    # Show ALL aliases from the configuration
-                    if aliases:
-                        # Show all aliases so Claude knows every option available
-                        all_aliases = sorted(aliases)
-                        alias_list = ", ".join(f"'{a}'" for a in all_aliases)
-                        description += f" OpenRouter aliases: {alias_list}."
-                    else:
-                        description += " OpenRouter: Any model available on openrouter.ai."
-                except Exception:
-                    description += (
-                        " OpenRouter: Any model available on openrouter.ai "
-                        "(e.g., 'gpt-4', 'claude-4-opus', 'mistral-large')."
-                    )
+                # OpenRouter models are now handled by LiteLLM configuration
+                description += (
+                    " OpenRouter: Any model available on openrouter.ai "
+                    "(e.g., 'gpt-4', 'claude-4-opus', 'mistral-large')."
+                )
             description += f" Defaults to '{DEFAULT_MODEL}' if not specified."
 
             return {

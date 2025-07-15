@@ -4,15 +4,7 @@ from .base import ModelCapabilities, ModelProvider, ModelResponse, ProviderType
 from .litellm_provider import LiteLLMProvider
 from .registry import ModelProviderRegistry
 
-# Keep legacy imports for backward compatibility during migration
-try:
-    from .gemini import GeminiModelProvider
-    from .openai_compatible import OpenAICompatibleProvider
-    from .openai_provider import OpenAIModelProvider
-    from .openrouter import OpenRouterProvider
-except ImportError:
-    # Legacy providers may be removed in task 6
-    pass
+# Legacy providers removed in task 6 - all models now use LiteLLMProvider
 
 __all__ = [
     "ModelProvider",

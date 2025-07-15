@@ -174,8 +174,8 @@ litellm_settings:
   cache: false  # Disable caching by default
   
   # Success callback (for logging/monitoring)
-  success_callback: []  # Can add custom callbacks
-  failure_callback: []  # Can add custom callbacks
+  success_callback: []  # Custom observability callbacks configured via code
+  failure_callback: []  # Custom observability callbacks configured via code
 
 # General settings
 general_settings:

@@ -1,5 +1,42 @@
 # Changelog
 
+## [7.0.0] - 2025-07-15
+
+### Changed
+- **LiteLLM Migration**: Completed migration from legacy providers to unified LiteLLM system
+  - All models now use a single `LiteLLMProvider` instead of separate provider implementations
+  - Removed legacy provider classes: `OpenAIModelProvider`, `GeminiModelProvider`, `XAIProvider`, `OpenRouterProvider`, `DIALProvider`, `CustomProvider`
+  - Simplified provider registry to use only `LiteLLMProvider` registered as `ProviderType.CUSTOM`
+  - Model configuration unified in `litellm_config.yaml` with separate `model_metadata.yaml` for Zen-specific features
+  - All existing model aliases and functionality preserved for backward compatibility
+
+### Added
+- **LiteLLM Configuration**: New configuration files for model management
+  - `litellm_config.yaml`: Complete model definitions, aliases, timeouts, and fallback chains
+  - `model_metadata.yaml`: Zen-specific metadata like thinking mode support and image capabilities
+  - `docs/litellm_feature_parity_checklist.md`: Comprehensive feature parity validation checklist
+  - `docs/litellm_setup.md`: LiteLLM setup and configuration documentation
+  - `docs/litellm_migration.md`: Migration guide from legacy providers
+
+### Removed
+- **Legacy Provider Files**: Removed all legacy provider implementations
+  - `providers/openai_provider.py`, `providers/gemini.py`, `providers/xai.py`
+  - `providers/openrouter.py`, `providers/openrouter_registry.py`, `providers/dial.py`
+  - `providers/custom.py`, `providers/openai_compatible.py`
+  - Associated test files and provider-specific functionality
+
+### Fixed
+- **Security**: Updated pip from 24.3.1 to 25.1.1 to address security vulnerability
+- **Test Coverage**: Updated test suite to work with unified LiteLLM provider
+- **Import Cleanup**: Removed all legacy provider imports throughout the codebase
+
+### Technical Details
+- **Breaking Change**: This is a major version due to architectural changes, though user-facing API remains compatible
+- **Provider Registry**: Simplified to use only `ProviderType.CUSTOM` for all models
+- **Model Resolution**: All models now resolve through LiteLLM's unified interface
+- **Configuration**: Environment variables and API keys work the same way, but routing is handled by LiteLLM
+- **Performance**: Improved reliability with LiteLLM's built-in fallback and retry mechanisms
+
 ## [6.3.1] - 2025-07-14
 
 ### Fixed
