@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.0.2] - 2025-07-15
+
+### Fixed
+- **Packaging**: Fixed missing modules and configuration files in `uvx` installation
+  - Added `observability*` to package includes to fix "No module named 'observability'" error
+  - Added `*.yaml` files to package data to include `model_metadata.yaml` and `litellm_config.yaml`
+  - These files are required for proper model discovery and auto mode functionality
+
 ## [7.0.1] - 2025-07-15
 
 ### Fixed

@@ -13,13 +13,13 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["tools*", "providers*", "systemprompts*", "utils*"]
+include = ["tools*", "providers*", "systemprompts*", "utils*", "observability*"]
 
 [tool.setuptools]
 py-modules = ["server", "config"]
 
 [tool.setuptools.package-data]
-"*" = ["conf/*.json"]
+"*" = ["conf/*.json", "*.yaml"]
 
 [tool.setuptools.data-files]
 "conf" = ["conf/custom_models.json"]
