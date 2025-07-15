@@ -8,29 +8,54 @@ model_list:
     litellm_params:
       model: "openai/o3"
       api_key: "os.environ/OPENAI_API_KEY"
-      temperature: 0.1
-      max_tokens: 4096
-
+      temperature: 1.0  # O3 only supports temperature=1.0
+      max_tokens: 100000
+      timeout: 600  # Model-specific timeout
+    
   - model_name: "o3-mini"
     litellm_params:
       model: "openai/o3-mini"
       api_key: "os.environ/OPENAI_API_KEY"
-      temperature: 0.1
-      max_tokens: 4096
+      temperature: 1.0  # O3 models only support temperature=1.0
+      max_tokens: 65536
+      timeout: 600
+    model_alias: ["o3mini"]
+    
+  - model_name: "o3-pro"
+    litellm_params:
+      model: "openai/o3-pro-2025-06-10"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 1.0  # O3 models only support temperature=1.0
+      max_tokens: 100000
+      timeout: 900  # Longer timeout for pro model
+    model_alias: ["o3pro", "o3-pro-2025-06-10"]
+    
+  - model_name: "o3-deep-research"
+    litellm_params:
+      model: "openai/o3-deep-research-2025-06-26"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 1.0  # O3 models only support temperature=1.0
+      max_tokens: 100000
+      timeout: 1200  # Extended timeout for deep research
+    model_alias: ["o3-research", "deep-research", "o3-deep-research-2025-06-26"]
 
   - model_name: "o4-mini"
     litellm_params:
       model: "openai/o4-mini"
       api_key: "os.environ/OPENAI_API_KEY"
-      temperature: 0.1
-      max_tokens: 4096
+      temperature: 1.0  # O4 models only support temperature=1.0
+      max_tokens: 16384
+      timeout: 600
+    model_alias: ["o4mini", "o4-mini-2025-04-16"]
 
-  - model_name: "gpt-4.1-2025-04-14"
+  - model_name: "gpt-4.1"
     litellm_params:
       model: "openai/gpt-4.1-2025-04-14"
       api_key: "os.environ/OPENAI_API_KEY"
       temperature: 0.7
-      max_tokens: 4096
+      max_tokens: 131072
+      timeout: 600
+    model_alias: ["gpt4.1", "gpt-4.1-2025-04-14"]
 
   # Google Gemini Models
   - model_name: "gemini-2.5-flash"
@@ -39,6 +64,8 @@ model_list:
       api_key: "os.environ/GOOGLE_API_KEY"
       temperature: 0.7
       max_tokens: 8192
+      timeout: 600
+    model_alias: ["flash", "flash2.5"]
 
   - model_name: "gemini-2.5-pro"
     litellm_params:
@@ -46,53 +73,76 @@ model_list:
       api_key: "os.environ/GOOGLE_API_KEY"
       temperature: 0.5
       max_tokens: 8192
+      timeout: 600
+    model_alias: ["pro", "gemini pro", "gemini-pro"]
 
   - model_name: "gemini-2.0-flash"
     litellm_params:
       model: "gemini/gemini-2.0-flash"
       api_key: "os.environ/GOOGLE_API_KEY"
       temperature: 0.7
-      max_tokens: 8192
+      max_tokens: 1048576  # 1M tokens
+      timeout: 600
+    model_alias: ["flash-2.0", "flash2"]
 
   - model_name: "gemini-2.0-flash-lite"
     litellm_params:
       model: "gemini/gemini-2.0-flash-lite"
       api_key: "os.environ/GOOGLE_API_KEY"
       temperature: 0.7
-      max_tokens: 8192
+      max_tokens: 1048576  # 1M tokens
+      timeout: 600
+    model_alias: ["flashlite", "flash-lite"]
 
   # X.AI GROK Models
-  - model_name: "grok-4-0709"
+  - model_name: "grok-4"
     litellm_params:
       model: "xai/grok-4-0709"
       api_key: "os.environ/XAI_API_KEY"
       temperature: 0.5
-      max_tokens: 4096
+      max_tokens: 131072
+      timeout: 600
+    model_alias: ["grok", "grok4", "grok-4-0709", "grok-4-latest"]
 
   - model_name: "grok-3"
     litellm_params:
       model: "xai/grok-3"
       api_key: "os.environ/XAI_API_KEY"
       temperature: 0.5
-      max_tokens: 4096
+      max_tokens: 131072
+      timeout: 600
+    model_alias: ["grok3"]
 
   - model_name: "grok-3-fast"
     litellm_params:
       model: "xai/grok-3-fast"
       api_key: "os.environ/XAI_API_KEY"
       temperature: 0.5
-      max_tokens: 4096
+      max_tokens: 131072
+      timeout: 600
+    model_alias: ["grok3fast", "grok3-fast"]
 
 # Router settings for fallback and retry behavior
 router_settings:
+  # Model routing strategy
+  routing_strategy: "simple-shuffle"  # Distribute load across models
+  
   # Enable model fallbacks for resilience
   enable_fallbacks: true
   allowed_fails: 3  # Number of fails before switching to fallback
+  
+  # Global fallback chain (can be overridden per model)
   fallback_models:
     - "gemini-2.5-flash"
-    - "gpt-4.1-2025-04-14"
+    - "gpt-4.1"
+    - "grok-3-fast"
   
-  # Retry configuration
+  # Context window fallbacks (when prompt exceeds model limit)
+  context_window_fallback_models:
+    - "gpt-4.1"  # 1M context
+    - "gemini-2.0-flash"  # 1M context
+  
+  # Retry configuration per error type
   retry_policy:
     TimeoutErrorRetries: 3
     RateLimitErrorRetries: 5
@@ -100,6 +150,7 @@ router_settings:
     BadRequestErrorRetries: 1
     ContentPolicyViolationErrorRetries: 0
     InternalServerErrorRetries: 3
+    ContextWindowExceededErrorRetries: 1  # Then fallback
 
 # LiteLLM module settings
 litellm_settings:
@@ -109,24 +160,35 @@ litellm_settings:
   
   # Response handling
   drop_params: true  # Drop unsupported params instead of erroring
+  trim_messages: true  # Trim messages if context window exceeded
   
   # Error handling
   suppress_debug_info: false  # Show debug info for development
+  num_retries: 3  # Global retry count (overridden by retry_policy)
   
   # Logging
   json_logs: false
   log_level: "INFO"
   
-  # Model access control (optional - we'll manage this at app level)
-  # allowed_models: null  # Allow all models by default
+  # Caching (optional)
+  cache: false  # Disable caching by default
+  
+  # Success callback (for logging/monitoring)
+  success_callback: []  # Can add custom callbacks
+  failure_callback: []  # Can add custom callbacks
 
 # General settings
 general_settings:
-  # Enable streaming globally
-  stream: true
+  # Model selection
+  default_model: null  # Let app handle default model selection
+  model_group_alias: {}  # Can define groups like "fast": ["flash", "grok-3-fast"]
   
   # API behavior
   forward_client_headers: false
+  custom_llm_provider: null  # Not needed, using standard providers
   
-  # Health check endpoint
-  health_check_interval: 60
+  # Load balancing
+  load_balancing_strategy: "usage-based-routing"  # Route based on usage
+  
+  # Environment
+  environment: "production"  # Can be "development" for debugging
