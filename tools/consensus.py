@@ -197,11 +197,11 @@ class ConsensusTool(SimpleTool):
 
     def _get_consensus_timeout(self) -> float:
         """Get the timeout for consensus model calls.
-        
+
         Uses environment variable CONSENSUS_MODEL_TIMEOUT if set, otherwise defaults to 10 minutes.
         This is separate from provider-level HTTP timeouts and specifically controls how long
         to wait for each model in the consensus workflow.
-        
+
         Returns:
             float: Timeout in seconds
         """
@@ -211,11 +211,15 @@ class ConsensusTool(SimpleTool):
         try:
             timeout = float(timeout_str)
             if timeout <= 0:
-                logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ({timeout}), using default of {default_timeout} seconds")
+                logger.warning(
+                    f"Invalid CONSENSUS_MODEL_TIMEOUT value ({timeout}), using default of {default_timeout} seconds"
+                )
                 return default_timeout
             return timeout
         except (ValueError, TypeError):
-            logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ('{timeout_str}'), using default of {default_timeout} seconds")
+            logger.warning(
+                f"Invalid CONSENSUS_MODEL_TIMEOUT value ('{timeout_str}'), using default of {default_timeout} seconds"
+            )
             return default_timeout
 
     async def execute(self, arguments: dict[str, Any]) -> list:

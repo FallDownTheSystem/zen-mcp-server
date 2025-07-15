@@ -1,0 +1,132 @@
+# LiteLLM Configuration for Zen MCP Server
+# This configuration defines all available models and their settings
+
+# Model definitions with aliases and parameters
+model_list:
+  # OpenAI Models
+  - model_name: "o3"
+    litellm_params:
+      model: "openai/o3"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 0.1
+      max_tokens: 4096
+
+  - model_name: "o3-mini"
+    litellm_params:
+      model: "openai/o3-mini"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 0.1
+      max_tokens: 4096
+
+  - model_name: "o4-mini"
+    litellm_params:
+      model: "openai/o4-mini"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 0.1
+      max_tokens: 4096
+
+  - model_name: "gpt-4.1-2025-04-14"
+    litellm_params:
+      model: "openai/gpt-4.1-2025-04-14"
+      api_key: "os.environ/OPENAI_API_KEY"
+      temperature: 0.7
+      max_tokens: 4096
+
+  # Google Gemini Models
+  - model_name: "gemini-2.5-flash"
+    litellm_params:
+      model: "gemini/gemini-2.5-flash"
+      api_key: "os.environ/GOOGLE_API_KEY"
+      temperature: 0.7
+      max_tokens: 8192
+
+  - model_name: "gemini-2.5-pro"
+    litellm_params:
+      model: "gemini/gemini-2.5-pro"
+      api_key: "os.environ/GOOGLE_API_KEY"
+      temperature: 0.5
+      max_tokens: 8192
+
+  - model_name: "gemini-2.0-flash"
+    litellm_params:
+      model: "gemini/gemini-2.0-flash"
+      api_key: "os.environ/GOOGLE_API_KEY"
+      temperature: 0.7
+      max_tokens: 8192
+
+  - model_name: "gemini-2.0-flash-lite"
+    litellm_params:
+      model: "gemini/gemini-2.0-flash-lite"
+      api_key: "os.environ/GOOGLE_API_KEY"
+      temperature: 0.7
+      max_tokens: 8192
+
+  # X.AI GROK Models
+  - model_name: "grok-4-0709"
+    litellm_params:
+      model: "xai/grok-4-0709"
+      api_key: "os.environ/XAI_API_KEY"
+      temperature: 0.5
+      max_tokens: 4096
+
+  - model_name: "grok-3"
+    litellm_params:
+      model: "xai/grok-3"
+      api_key: "os.environ/XAI_API_KEY"
+      temperature: 0.5
+      max_tokens: 4096
+
+  - model_name: "grok-3-fast"
+    litellm_params:
+      model: "xai/grok-3-fast"
+      api_key: "os.environ/XAI_API_KEY"
+      temperature: 0.5
+      max_tokens: 4096
+
+# Router settings for fallback and retry behavior
+router_settings:
+  # Enable model fallbacks for resilience
+  enable_fallbacks: true
+  allowed_fails: 3  # Number of fails before switching to fallback
+  fallback_models:
+    - "gemini-2.5-flash"
+    - "gpt-4.1-2025-04-14"
+  
+  # Retry configuration
+  retry_policy:
+    TimeoutErrorRetries: 3
+    RateLimitErrorRetries: 5
+    AuthenticationErrorRetries: 1
+    BadRequestErrorRetries: 1
+    ContentPolicyViolationErrorRetries: 0
+    InternalServerErrorRetries: 3
+
+# LiteLLM module settings
+litellm_settings:
+  # Request timeout configuration (in seconds)
+  request_timeout: 600  # Global timeout matching CONSENSUS_MODEL_TIMEOUT default
+  connect_timeout: 30   # Connection timeout
+  
+  # Response handling
+  drop_params: true  # Drop unsupported params instead of erroring
+  
+  # Error handling
+  suppress_debug_info: false  # Show debug info for development
+  
+  # Logging
+  json_logs: false
+  log_level: "INFO"
+  
+  # Model access control (optional - we'll manage this at app level)
+  # allowed_models: null  # Allow all models by default
+
+# General settings
+general_settings:
+  # Enable streaming globally
+  stream: true
+  
+  # API behavior
+  forward_client_headers: false
+  
+  # Health check endpoint
+  health_check_interval: 60
