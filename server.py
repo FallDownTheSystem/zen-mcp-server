@@ -1275,6 +1275,10 @@ def run():
         # Use WindowsSelectorEventLoopPolicy for stdio-based protocols
         # Selector loop provides backpressure for pipe writes, preventing buffer overflow
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        
+        # Apply Windows-specific stdio patches to prevent "Invalid argument" errors
+        from utils.stdio_wrapper import patch_stdio_for_windows
+        patch_stdio_for_windows()
 
         # Enable asyncio debug mode on Windows to help diagnose issues
         if os.getenv("ZEN_DEBUG_ASYNC", "").lower() == "true":
