@@ -253,6 +253,10 @@ class LiteLLMProvider(ModelProvider):
     def _configure_observability(self):
         """Configure LiteLLM observability callbacks."""
         try:
+            # TEMPORARILY DISABLED TO TEST HANGING ISSUE
+            logger.warning("OBSERVABILITY TEMPORARILY DISABLED FOR DEBUGGING")
+            return
+            
             # Check if observability is enabled
             enable_observability = os.getenv("OBSERVABILITY_ENABLED", "true").lower() == "true"
 
