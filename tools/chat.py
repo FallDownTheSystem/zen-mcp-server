@@ -52,11 +52,7 @@ class ChatTool(SimpleTool):
         return "chat"
 
     def get_description(self) -> str:
-        return (
-            "GENERAL CHAT & COLLABORATIVE THINKING - For development assistance, brainstorming, and code analysis. "
-            "Use when you need: explanations, comparisons, second opinions, approach validation, or general development questions. "
-            "Supports files, images, and conversation continuation."
-        )
+        return "GENERAL CHAT & COLLABORATIVE THINKING - For development assistance, brainstorming, and code analysis. Supports files, images, and conversation continuation."
 
     def get_system_prompt(self) -> str:
         return CHAT_PROMPT
@@ -183,12 +179,14 @@ class ChatTool(SimpleTool):
     async def prepare_prompt(self, request: ChatRequest) -> str:
         """
         Prepare the chat prompt with optional context files.
-
-        This implementation matches the original Chat tool exactly while using
-        SimpleTool convenience methods for cleaner code.
+        
+        This creates a clean user prompt without duplicating system instructions.
         """
-        # Use SimpleTool's Chat-style prompt preparation
-        return self.prepare_chat_style_prompt(request)
+        # Get user content (handles prompt.txt files)
+        user_content = self.handle_prompt_file_with_fallback(request)
+        
+        # Build user prompt with file context and web search instructions (no system prompt)
+        return self.build_user_prompt(user_content, request, "CONTEXT FILES")
 
     def format_response(self, response: str, request: ChatRequest, model_info: Optional[dict] = None) -> str:
         """

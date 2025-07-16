@@ -108,8 +108,9 @@ class TestChatTool:
                             prompt = await self.tool.prepare_prompt(request)
 
                             assert "Test prompt" in prompt
-                            assert "System prompt" in prompt
-                            assert "USER REQUEST" in prompt
+                            # System prompt is now separate, not included in user prompt
+                            assert "System prompt" not in prompt
+                            assert "USER REQUEST" not in prompt
 
     def test_response_formatting(self):
         """Test that response formatting works correctly"""
@@ -180,7 +181,7 @@ class TestChatRequestModel:
         # Should have inherited fields
         assert hasattr(request, "model")
         assert hasattr(request, "temperature")
-        assert hasattr(request, "thinking_mode")
+        assert hasattr(request, "reasoning_effort")
         assert hasattr(request, "use_websearch")
         assert hasattr(request, "continuation_id")
         assert hasattr(request, "images")  # From base model too
