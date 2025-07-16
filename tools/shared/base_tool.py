@@ -498,17 +498,17 @@ class BaseTool(ABC):
         """
         return True  # All tools get line numbers by default for consistency
 
-    def get_default_thinking_mode(self) -> str:
+    def get_default_reasoning_effort(self) -> str:
         """
-        Return the default thinking mode for this tool.
+        Return the default reasoning effort for this tool.
 
-        Thinking mode controls computational budget for reasoning.
+        Reasoning effort controls computational budget for reasoning.
         Override for tools that need more or less reasoning depth.
 
         Returns:
             str: One of "minimal", "low", "medium", "high", "max"
         """
-        return "medium"  # Default to medium thinking for better reasoning
+        return "medium"  # Default to medium reasoning for better reasoning
 
     def get_model_category(self) -> "ToolModelCategory":
         """

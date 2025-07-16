@@ -22,8 +22,8 @@ COMMON_FIELD_DESCRIPTIONS = {
         "Temperature for response (0.0 to 1.0). Lower values are more focused and deterministic, "
         "higher values are more creative. Tool-specific defaults apply if not specified."
     ),
-    "thinking_mode": (
-        "Thinking depth: minimal (0.5% of model max), low (8%), medium (33%), high (67%), "
+    "reasoning_effort": (
+        "Reasoning depth: minimal (0.5% of model max), low (8%), medium (33%), high (67%), "
         "max (100% of model max). Higher modes enable deeper reasoning at the cost of speed."
     ),
     "use_websearch": (
@@ -63,7 +63,7 @@ class ToolRequest(BaseModel):
     # Model configuration
     model: Optional[str] = Field(None, description=COMMON_FIELD_DESCRIPTIONS["model"])
     temperature: Optional[float] = Field(None, ge=0.0, le=1.0, description=COMMON_FIELD_DESCRIPTIONS["temperature"])
-    thinking_mode: Optional[str] = Field(None, description=COMMON_FIELD_DESCRIPTIONS["thinking_mode"])
+    reasoning_effort: Optional[str] = Field("medium", description=COMMON_FIELD_DESCRIPTIONS["reasoning_effort"])
 
     # Features
     use_websearch: Optional[bool] = Field(True, description=COMMON_FIELD_DESCRIPTIONS["use_websearch"])

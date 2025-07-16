@@ -154,7 +154,7 @@ class GeminiModelProvider(ModelProvider):
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_output_tokens: Optional[int] = None,
-        thinking_mode: str = "medium",
+        reasoning_effort: str = "medium",
         images: Optional[list[str]] = None,
         **kwargs,
     ) -> ModelResponse:
@@ -203,12 +203,12 @@ class GeminiModelProvider(ModelProvider):
 
         # Add thinking configuration for models that support it
         capabilities = self.get_capabilities(model_name)
-        if capabilities.supports_extended_thinking and thinking_mode in self.THINKING_BUDGETS:
+        if capabilities.supports_extended_thinking and reasoning_effort in self.THINKING_BUDGETS:
             # Get model's max thinking tokens and calculate actual budget
             model_config = self.SUPPORTED_MODELS.get(resolved_name)
             if model_config and model_config.max_thinking_tokens > 0:
                 max_thinking_tokens = model_config.max_thinking_tokens
-                actual_thinking_budget = int(max_thinking_tokens * self.THINKING_BUDGETS[thinking_mode])
+                actual_thinking_budget = int(max_thinking_tokens * self.THINKING_BUDGETS[reasoning_effort])
                 generation_config.thinking_config = types.ThinkingConfig(thinking_budget=actual_thinking_budget)
 
         # Retry logic with progressive delays
@@ -236,7 +236,7 @@ class GeminiModelProvider(ModelProvider):
                     friendly_name="Gemini",
                     provider=ProviderType.GOOGLE,
                     metadata={
-                        "thinking_mode": thinking_mode if capabilities.supports_extended_thinking else None,
+                        "reasoning_effort": reasoning_effort if capabilities.supports_extended_thinking else None,
                         "finish_reason": (
                             getattr(response.candidates[0], "finish_reason", "STOP") if response.candidates else "STOP"
                         ),
@@ -305,7 +305,7 @@ class GeminiModelProvider(ModelProvider):
         capabilities = self.get_capabilities(model_name)
         return capabilities.supports_extended_thinking
 
-    def get_thinking_budget(self, model_name: str, thinking_mode: str) -> int:
+    def get_thinking_budget(self, model_name: str, reasoning_effort: str) -> int:
         """Get actual thinking token budget for a model and thinking mode."""
         resolved_name = self._resolve_model_name(model_name)
         model_config = self.SUPPORTED_MODELS.get(resolved_name)
@@ -313,14 +313,14 @@ class GeminiModelProvider(ModelProvider):
         if not model_config or not model_config.supports_extended_thinking:
             return 0
 
-        if thinking_mode not in self.THINKING_BUDGETS:
+        if reasoning_effort not in self.THINKING_BUDGETS:
             return 0
 
         max_thinking_tokens = model_config.max_thinking_tokens
         if max_thinking_tokens == 0:
             return 0
 
-        return int(max_thinking_tokens * self.THINKING_BUDGETS[thinking_mode])
+        return int(max_thinking_tokens * self.THINKING_BUDGETS[reasoning_effort])
 
     def _extract_usage(self, response) -> dict[str, int]:
         """Extract token usage from Gemini response."""

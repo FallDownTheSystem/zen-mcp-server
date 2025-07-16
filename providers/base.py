@@ -301,7 +301,7 @@ class ModelProvider(ABC):
 
     @abstractmethod
     def supports_thinking_mode(self, model_name: str) -> bool:
-        """Check if the model supports extended thinking mode."""
+        """Check if the model supports extended reasoning effort mode."""
         pass
 
     def get_model_configurations(self) -> dict[str, ModelCapabilities]:

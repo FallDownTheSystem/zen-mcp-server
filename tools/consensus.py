@@ -510,7 +510,7 @@ class ConsensusTool(SimpleTool):
                 model_name=model_name,
                 system_prompt=system_prompt,
                 temperature=request.temperature if request.temperature is not None else 0.2,
-                thinking_mode="medium",
+                thinking_mode=request.reasoning_effort,
                 images=request.images if request.images else None,
                 timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )
@@ -572,7 +572,7 @@ class ConsensusTool(SimpleTool):
                 model_name=model_name,
                 system_prompt=system_prompt,
                 temperature=request.temperature if request.temperature is not None else 0.2,
-                thinking_mode="medium",
+                thinking_mode=request.reasoning_effort,
                 images=request.images if request.images else None,
                 timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
             )

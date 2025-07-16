@@ -111,13 +111,14 @@ class ChatTool(SimpleTool):
                     "maximum": 1.0,
                     "default": 0.5,
                 },
-                "thinking_mode": {
+                "reasoning_effort": {
                     "type": "string",
                     "enum": ["minimal", "low", "medium", "high", "max"],
                     "description": (
-                        "Thinking depth: minimal (0.5% of model max), low (8%), medium (33%), high (67%), "
+                        "Reasoning depth: minimal (0.5% of model max), low (8%), medium (33%), high (67%), "
                         "max (100% of model max)"
                     ),
+                    "default": "medium",
                 },
                 "use_websearch": {
                     "type": "boolean",
