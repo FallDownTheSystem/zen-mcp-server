@@ -94,9 +94,11 @@ log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 root_logger = logging.getLogger()
 root_logger.handlers.clear()
 
-# Create and configure stderr handler explicitly
+# Create and configure stderr handler with WARNING level to prevent pipe overflow
+# Console logging can be dangerous when parent process doesn't read stderr
 stderr_handler = logging.StreamHandler(sys.stderr)
-stderr_handler.setLevel(getattr(logging, log_level, logging.INFO))
+# Only log WARNING and above to stderr to minimize pipe buffer usage
+stderr_handler.setLevel(logging.WARNING)
 stderr_handler.setFormatter(LocalTimeFormatter(log_format))
 root_logger.addHandler(stderr_handler)
 
@@ -552,6 +554,11 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         logger.info("[MCP_DEBUG] Found continuation_id, starting reconstruction")
         continuation_id = arguments["continuation_id"]
         logger.debug(f"Resuming conversation thread: {continuation_id}")
+        # Only flush file handlers to avoid blocking on stderr pipe
+        for handler in logger.handlers:
+            if isinstance(handler, RotatingFileHandler):
+                handler.flush()
+        
         logger.debug(
             f"[CONVERSATION_DEBUG] Tool '{name}' resuming thread {continuation_id} with {len(arguments)} arguments"
         )
@@ -565,8 +572,27 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             pass
 
         logger.info("[MCP_DEBUG] About to call reconstruct_thread_context")
-        arguments = await reconstruct_thread_context(arguments)
-        logger.info("[MCP_DEBUG] reconstruct_thread_context completed")
+        # Only flush file handlers to avoid blocking on stderr pipe
+        for handler in logger.handlers:
+            if isinstance(handler, RotatingFileHandler):
+                handler.flush()
+        
+        try:
+            # Add timeout to prevent indefinite hanging
+            arguments = await asyncio.wait_for(
+                reconstruct_thread_context(arguments),
+                timeout=30.0  # 30 second timeout
+            )
+            logger.info("[MCP_DEBUG] reconstruct_thread_context completed")
+        except asyncio.TimeoutError:
+            logger.error(f"[MCP_DEBUG] reconstruct_thread_context timed out for thread {continuation_id}")
+            raise ValueError(
+                "Request timed out while loading conversation history. "
+                "Please try again or start a new conversation."
+            )
+        except Exception as e:
+            logger.error(f"[MCP_DEBUG] reconstruct_thread_context failed: {e}", exc_info=True)
+            raise
         logger.debug(f"[CONVERSATION_DEBUG] After thread reconstruction, arguments keys: {list(arguments.keys())}")
         if "_remaining_tokens" in arguments:
             logger.debug(f"[CONVERSATION_DEBUG] Remaining token budget: {arguments['_remaining_tokens']:,}")
@@ -858,13 +884,21 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
         4. Debug tool can reference specific findings from analyze tool
         5. Natural cross-tool collaboration without context loss
     """
+    logger.info(f"[RECONSTRUCT_DEBUG] Starting reconstruct_thread_context for {arguments.get('continuation_id')}")
+    # Only flush file handlers to avoid blocking on stderr pipe
+    for handler in logger.handlers:
+        if isinstance(handler, RotatingFileHandler):
+            handler.flush()
+    
+    # Import at module level to avoid potential async issues
+    # (these are already imported at the top of the file if needed)
     from utils.conversation_memory import add_turn, build_conversation_history, get_thread
 
     continuation_id = arguments["continuation_id"]
 
     # Get thread context from storage
     logger.debug(f"[CONVERSATION_DEBUG] Looking up thread {continuation_id} in storage")
-    context = get_thread(continuation_id)
+    context = await get_thread(continuation_id)
     if not context:
         logger.warning(f"Thread not found: {continuation_id}")
         logger.debug(f"[CONVERSATION_DEBUG] Thread {continuation_id} not found in storage or expired")
@@ -899,7 +933,7 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
             f"[CONVERSATION_DEBUG] User prompt length: {len(user_prompt)} chars (~{user_prompt_tokens:,} tokens)"
         )
         logger.debug(f"[CONVERSATION_DEBUG] User files: {user_files}")
-        success = add_turn(continuation_id, "user", user_prompt, files=user_files)
+        success = await add_turn(continuation_id, "user", user_prompt, files=user_files)
         if not success:
             logger.warning(f"Failed to add user turn to thread {continuation_id}")
             logger.debug("[CONVERSATION_DEBUG] Failed to add user turn - thread may be at turn limit or expired")
@@ -1219,11 +1253,38 @@ async def main():
 
 def run():
     """Console script entry point for zen-mcp-server."""
+    import sys
+    import platform
+    
+    # Fix for Windows asyncio issues
+    if platform.system() == "Windows":
+        # Use WindowsSelectorEventLoopPolicy for stdio-based protocols
+        # Selector loop provides backpressure for pipe writes, preventing buffer overflow
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        
+        # Enable asyncio debug mode on Windows to help diagnose issues
+        if os.getenv("ZEN_DEBUG_ASYNC", "").lower() == "true":
+            asyncio.set_debug(True)
+            import warnings
+            warnings.simplefilter("default")  # Show asyncio warnings
+    
     try:
-        asyncio.run(main())
+        # Create and set a new event loop explicitly
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            loop.run_until_complete(main())
+        finally:
+            # Ensure proper cleanup
+            loop.close()
     except KeyboardInterrupt:
         # Handle graceful shutdown
+        logger.info("Server shutdown requested")
         pass
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

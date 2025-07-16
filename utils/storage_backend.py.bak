@@ -18,7 +18,6 @@ Key Features:
 - Drop-in replacement for Redis storage (for single-process scenarios)
 """
 
-import asyncio
 import logging
 import os
 import threading
@@ -29,39 +28,36 @@ logger = logging.getLogger(__name__)
 
 
 class InMemoryStorage:
-    """Asyncio-safe in-memory storage for conversation threads"""
+    """Thread-safe in-memory storage for conversation threads"""
 
     def __init__(self):
         self._store: dict[str, tuple[str, float]] = {}
-        self._lock = asyncio.Lock()  # Use asyncio.Lock instead of threading.Lock
+        self._lock = threading.Lock()
         # Match Redis behavior: cleanup interval based on conversation timeout
         # Run cleanup at 1/10th of timeout interval (e.g., 18 mins for 3 hour timeout)
         timeout_hours = int(os.getenv("CONVERSATION_TIMEOUT_HOURS", "3"))
         self._cleanup_interval = (timeout_hours * 3600) // 10
         self._cleanup_interval = max(300, self._cleanup_interval)  # Minimum 5 minutes
-        self._shutdown = asyncio.Event()
+        self._shutdown = False
 
-        # Start background cleanup as an asyncio task
-        self._cleanup_task = None  # Will be created on first async operation
+        # Start background cleanup thread
+        self._cleanup_thread = threading.Thread(target=self._cleanup_worker, daemon=True)
+        self._cleanup_thread.start()
 
         logger.info(
             f"In-memory storage initialized with {timeout_hours}h timeout, cleanup every {self._cleanup_interval // 60}m"
         )
 
-    async def set_with_ttl(self, key: str, ttl_seconds: int, value: str) -> None:
+    def set_with_ttl(self, key: str, ttl_seconds: int, value: str) -> None:
         """Store value with expiration time"""
-        async with self._lock:
+        with self._lock:
             expires_at = time.time() + ttl_seconds
             self._store[key] = (value, expires_at)
             logger.debug(f"Stored key {key} with TTL {ttl_seconds}s")
-            
-            # Start cleanup task if not already running
-            if self._cleanup_task is None:
-                self._cleanup_task = asyncio.create_task(self._cleanup_worker())
 
-    async def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> Optional[str]:
         """Retrieve value if not expired"""
-        async with self._lock:
+        with self._lock:
             if key in self._store:
                 value, expires_at = self._store[key]
                 if time.time() < expires_at:
@@ -73,22 +69,19 @@ class InMemoryStorage:
                     logger.debug(f"Key {key} expired and removed")
         return None
 
-    async def setex(self, key: str, ttl_seconds: int, value: str) -> None:
+    def setex(self, key: str, ttl_seconds: int, value: str) -> None:
         """Redis-compatible setex method"""
-        await self.set_with_ttl(key, ttl_seconds, value)
+        self.set_with_ttl(key, ttl_seconds, value)
 
-    async def _cleanup_worker(self):
-        """Background task that periodically cleans up expired entries"""
-        while not self._shutdown.is_set():
-            try:
-                await asyncio.sleep(self._cleanup_interval)
-                await self._cleanup_expired()
-            except asyncio.CancelledError:
-                break
+    def _cleanup_worker(self):
+        """Background thread that periodically cleans up expired entries"""
+        while not self._shutdown:
+            time.sleep(self._cleanup_interval)
+            self._cleanup_expired()
 
-    async def _cleanup_expired(self):
+    def _cleanup_expired(self):
         """Remove all expired entries"""
-        async with self._lock:
+        with self._lock:
             current_time = time.time()
             expired_keys = [k for k, (_, exp) in self._store.items() if exp < current_time]
             for key in expired_keys:
@@ -97,15 +90,11 @@ class InMemoryStorage:
             if expired_keys:
                 logger.debug(f"Cleaned up {len(expired_keys)} expired conversation threads")
 
-    async def shutdown(self):
-        """Graceful shutdown of background task"""
-        self._shutdown.set()
-        if self._cleanup_task:
-            self._cleanup_task.cancel()
-            try:
-                await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
+    def shutdown(self):
+        """Graceful shutdown of background thread"""
+        self._shutdown = True
+        if self._cleanup_thread.is_alive():
+            self._cleanup_thread.join(timeout=1)
 
 
 # Global singleton instance

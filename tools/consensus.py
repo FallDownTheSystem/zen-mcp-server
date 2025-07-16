@@ -408,12 +408,12 @@ class ConsensusTool(SimpleTool):
 
                 if request.continuation_id:
                     # Continuing existing conversation
-                    thread_context = get_thread(request.continuation_id)
+                    thread_context = await get_thread(request.continuation_id)
                     if thread_context and thread_context.turns:
                         turn_count = len(thread_context.turns)
                         if turn_count < MAX_CONVERSATION_TURNS - 1:
                             # Add consensus result as assistant turn
-                            add_turn(
+                            await add_turn(
                                 request.continuation_id,
                                 "assistant",
                                 self._format_consensus_for_storage(response_data),
@@ -441,7 +441,7 @@ class ConsensusTool(SimpleTool):
                         "reasoning_effort": request.reasoning_effort,
                     }
 
-                    new_thread_id = create_thread(tool_name="consensus", initial_request=initial_request_dict)
+                    new_thread_id = await create_thread(tool_name="consensus", initial_request=initial_request_dict)
 
                     # Add user's initial turn
                     add_turn(
@@ -502,7 +502,7 @@ class ConsensusTool(SimpleTool):
 
             # Add model-specific continuation history for initial phase only
             if request.continuation_id and phase == "initial":
-                model_history = self._build_model_specific_history(model_name, request.continuation_id, request.models)
+                model_history = await self._build_model_specific_history(model_name, request.continuation_id, request.models)
 
                 if model_history:
                     prompt = f"{model_history}\n\nNEW QUESTION:\n{prompt}"
@@ -670,11 +670,11 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
 
         return prompt
 
-    def _extract_previous_consensus(self, continuation_id: str) -> dict[str, str]:
+    async def _extract_previous_consensus(self, continuation_id: str) -> dict[str, str]:
         """Extract model responses from previous consensus turns in the conversation."""
         from utils.conversation_memory import get_thread
 
-        thread = get_thread(continuation_id)
+        thread = await get_thread(continuation_id)
         if not thread:
             return {}
 
@@ -695,10 +695,10 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
 
         return consensus_responses
 
-    def _build_model_specific_history(self, current_model: str, continuation_id: str, all_current_models: list) -> str:
+    async def _build_model_specific_history(self, current_model: str, continuation_id: str, all_current_models: list) -> str:
         """Build conversation history specific to each model based on continuation context."""
         # Get previous consensus responses
-        previous_consensus = self._extract_previous_consensus(continuation_id)
+        previous_consensus = await self._extract_previous_consensus(continuation_id)
         if not previous_consensus:
             return ""
 

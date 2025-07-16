@@ -346,17 +346,17 @@ class SimpleTool(BaseTool):
                     # Get thread context
                     from utils.conversation_memory import add_turn, build_conversation_history, get_thread
 
-                    thread_context = get_thread(continuation_id)
+                    thread_context = await get_thread(continuation_id)
 
                     if thread_context:
                         # Add user's new input to conversation
                         user_prompt = self.get_request_prompt(request)
                         user_files = self.get_request_files(request)
                         if user_prompt:
-                            add_turn(continuation_id, "user", user_prompt, files=user_files)
+                            await add_turn(continuation_id, "user", user_prompt, files=user_files)
 
                             # Get updated thread context after adding the turn
-                            thread_context = get_thread(continuation_id)
+                            thread_context = await get_thread(continuation_id)
                             logger.debug(
                                 f"{self.get_name()}: Retrieved updated thread with {len(thread_context.turns)} turns"
                             )
@@ -460,7 +460,7 @@ class SimpleTool(BaseTool):
                 }
 
                 # Parse response using the same logic as old base.py
-                tool_output = self._parse_response(raw_text, request, model_info)
+                tool_output = await self._parse_response(raw_text, request, model_info)
                 logger.info(f"✅ {self.get_name()} tool completed successfully")
 
             else:
@@ -500,7 +500,7 @@ class SimpleTool(BaseTool):
             )
             return [TextContent(type="text", text=error_output.model_dump_json())]
 
-    def _parse_response(self, raw_text: str, request, model_info: Optional[dict] = None):
+    async def _parse_response(self, raw_text: str, request, model_info: Optional[dict] = None):
         """
         Parse the raw response and format it using the hook method.
 
@@ -542,7 +542,7 @@ class SimpleTool(BaseTool):
 
             # Only add the assistant's response to the conversation
             # The user's turn is handled elsewhere (when thread is created/continued)
-            add_turn(
+            await add_turn(
                 continuation_id,  # thread_id as positional argument
                 "assistant",  # role as positional argument
                 raw_text,  # content as positional argument
@@ -555,7 +555,7 @@ class SimpleTool(BaseTool):
             )
 
         # Create continuation offer like old base.py
-        continuation_data = self._create_continuation_offer(request, model_info)
+        continuation_data = await self._create_continuation_offer(request, model_info)
         if continuation_data:
             return self._create_continuation_offer_response(formatted_response, continuation_data, request, model_info)
         else:
@@ -588,7 +588,7 @@ class SimpleTool(BaseTool):
                 metadata=metadata if metadata else None,
             )
 
-    def _create_continuation_offer(self, request, model_info: Optional[dict] = None):
+    async def _create_continuation_offer(self, request, model_info: Optional[dict] = None):
         """Create continuation offer following old base.py pattern"""
         continuation_id = self.get_request_continuation_id(request)
 
@@ -597,7 +597,7 @@ class SimpleTool(BaseTool):
 
             if continuation_id:
                 # Existing conversation
-                thread_context = get_thread(continuation_id)
+                thread_context = await get_thread(continuation_id)
                 if thread_context and thread_context.turns:
                     turn_count = len(thread_context.turns)
                     from utils.conversation_memory import MAX_CONVERSATION_TURNS
@@ -616,7 +616,7 @@ class SimpleTool(BaseTool):
                 # Convert request to dict for initial_context
                 initial_request_dict = self.get_request_as_dict(request)
 
-                new_thread_id = create_thread(tool_name=self.get_name(), initial_request=initial_request_dict)
+                new_thread_id = await create_thread(tool_name=self.get_name(), initial_request=initial_request_dict)
 
                 # Add the initial user turn to the new thread
                 from utils.conversation_memory import MAX_CONVERSATION_TURNS, add_turn
@@ -626,7 +626,7 @@ class SimpleTool(BaseTool):
                 user_images = self.get_request_images(request)
 
                 # Add user's initial turn
-                add_turn(
+                await add_turn(
                     new_thread_id, "user", user_prompt, files=user_files, images=user_images, tool_name=self.get_name()
                 )
 

@@ -1,9 +1,12 @@
 """
-In-memory storage backend for conversation threads
+In-memory storage backend for conversation threads (Async version)
 
-This module provides a thread-safe, in-memory alternative to Redis for storing
-conversation contexts. It's designed for ephemeral MCP server sessions where
-conversations only need to persist during a single Claude session.
+This module provides a thread-safe AND asyncio-safe in-memory alternative to Redis
+for storing conversation contexts. It's designed for ephemeral MCP server sessions
+where conversations only need to persist during a single Claude session.
+
+This async version fixes the threading.Lock deadlock issue by using asyncio.Lock
+instead, which properly yields control to the event loop.
 
 ⚠️  PROCESS-SPECIFIC STORAGE: This storage is confined to a single Python process.
     Data stored in one process is NOT accessible from other processes or subprocesses.
@@ -11,9 +14,9 @@ conversations only need to persist during a single Claude session.
     share conversation state between tool calls.
 
 Key Features:
-- Thread-safe operations using locks
+- Asyncio-safe operations using asyncio.Lock
 - TTL support with automatic expiration
-- Background cleanup thread for memory management
+- Background cleanup task for memory management
 - Singleton pattern for consistent state within a single process
 - Drop-in replacement for Redis storage (for single-process scenarios)
 """
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class InMemoryStorage:
-    """Asyncio-safe in-memory storage for conversation threads"""
+    """Thread-safe AND asyncio-safe in-memory storage for conversation threads"""
 
     def __init__(self):
         self._store: dict[str, tuple[str, float]] = {}
@@ -42,7 +45,7 @@ class InMemoryStorage:
         self._shutdown = asyncio.Event()
 
         # Start background cleanup as an asyncio task
-        self._cleanup_task = None  # Will be created on first async operation
+        self._cleanup_task = asyncio.create_task(self._cleanup_worker())
 
         logger.info(
             f"In-memory storage initialized with {timeout_hours}h timeout, cleanup every {self._cleanup_interval // 60}m"
@@ -54,10 +57,6 @@ class InMemoryStorage:
             expires_at = time.time() + ttl_seconds
             self._store[key] = (value, expires_at)
             logger.debug(f"Stored key {key} with TTL {ttl_seconds}s")
-            
-            # Start cleanup task if not already running
-            if self._cleanup_task is None:
-                self._cleanup_task = asyncio.create_task(self._cleanup_worker())
 
     async def get(self, key: str) -> Optional[str]:
         """Retrieve value if not expired"""
@@ -100,17 +99,16 @@ class InMemoryStorage:
     async def shutdown(self):
         """Graceful shutdown of background task"""
         self._shutdown.set()
-        if self._cleanup_task:
-            self._cleanup_task.cancel()
-            try:
-                await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
+        self._cleanup_task.cancel()
+        try:
+            await self._cleanup_task
+        except asyncio.CancelledError:
+            pass  # Expected
 
 
 # Global singleton instance
 _storage_instance = None
-_storage_lock = threading.Lock()
+_storage_lock = threading.Lock()  # This lock is fine for singleton creation
 
 
 def get_storage_backend() -> InMemoryStorage:

@@ -508,7 +508,7 @@ class BaseTool(ABC):
 
     # === CONVERSATION AND FILE HANDLING METHODS ===
 
-    def get_conversation_embedded_files(self, continuation_id: Optional[str]) -> list[str]:
+    async def get_conversation_embedded_files(self, continuation_id: Optional[str]) -> list[str]:
         """
         Get list of files already embedded in conversation history.
 
@@ -527,7 +527,7 @@ class BaseTool(ABC):
             # New conversation, no files embedded yet
             return []
 
-        thread_context = get_thread(continuation_id)
+        thread_context = await get_thread(continuation_id)
         if not thread_context:
             # Thread not found, no files embedded
             return []
