@@ -49,6 +49,7 @@ CONVERSATION_TIMEOUT_SECONDS = CONVERSATION_TIMEOUT_HOURS * 3600
 
 class ConversationTurn(BaseModel):
     """Single turn in a conversation"""
+
     role: str  # "user" or "assistant"
     content: str
     timestamp: str
@@ -62,6 +63,7 @@ class ConversationTurn(BaseModel):
 
 class ThreadContext(BaseModel):
     """Complete conversation context for a thread"""
+
     thread_id: str
     parent_thread_id: Optional[str] = None  # Parent thread for conversation chains
     created_at: str
@@ -74,13 +76,14 @@ class ThreadContext(BaseModel):
 def get_storage():
     """Get in-memory storage backend for conversation persistence."""
     from .storage_backend_async import get_storage_backend
+
     return get_storage_backend()
 
 
 async def create_thread(tool_name: str, initial_request: dict[str, Any], parent_thread_id: Optional[str] = None) -> str:
     """
     Create new conversation thread and return thread ID.
-    
+
     This is now an async function and must be awaited.
     """
     thread_id = str(uuid.uuid4())
@@ -116,7 +119,7 @@ async def create_thread(tool_name: str, initial_request: dict[str, Any], parent_
 async def get_thread(thread_id: str) -> Optional[ThreadContext]:
     """
     Retrieve thread context from in-memory storage.
-    
+
     This is now an async function and must be awaited.
     """
     if not thread_id or not _is_valid_uuid(thread_id):
@@ -148,7 +151,7 @@ async def add_turn(
 ) -> bool:
     """
     Add turn to existing thread with atomic file ordering.
-    
+
     This is now an async function and must be awaited.
     """
     logger.debug(f"[FLOW] Adding {role} turn to {thread_id} ({tool_name})")
@@ -183,7 +186,9 @@ async def add_turn(
     try:
         storage = get_storage()
         key = f"thread:{thread_id}"
-        await storage.setex(key, CONVERSATION_TIMEOUT_SECONDS, context.model_dump_json())  # Refresh TTL to configured timeout
+        await storage.setex(
+            key, CONVERSATION_TIMEOUT_SECONDS, context.model_dump_json()
+        )  # Refresh TTL to configured timeout
         return True
     except Exception as e:
         logger.debug(f"[FLOW] Failed to save turn to storage: {type(e).__name__}")
@@ -193,7 +198,7 @@ async def add_turn(
 async def get_thread_chain(thread_id: str, max_depth: int = 20) -> list[ThreadContext]:
     """
     Traverse the parent chain to get all threads in conversation sequence.
-    
+
     This is now an async function and must be awaited.
     """
     chain = []
@@ -227,7 +232,7 @@ async def get_thread_chain(thread_id: str, max_depth: int = 20) -> list[ThreadCo
 def get_conversation_file_list(context: ThreadContext) -> list[str]:
     """
     Extract all unique files from conversation turns with newest-first prioritization.
-    
+
     This function remains synchronous as it doesn't interact with storage.
     """
     if not context.turns:
@@ -262,7 +267,7 @@ def get_conversation_file_list(context: ThreadContext) -> list[str]:
 def get_conversation_image_list(context: ThreadContext) -> list[str]:
     """
     Extract all unique images from conversation turns with newest-first prioritization.
-    
+
     This function remains synchronous as it doesn't interact with storage.
     """
     if not context.turns:
@@ -297,6 +302,7 @@ def get_conversation_image_list(context: ThreadContext) -> list[str]:
 # Include all the other helper functions from the original file that don't need async
 # (build_conversation_history, _plan_file_inclusion_by_size, _get_tool_formatted_content, etc.)
 # These functions remain the same as they don't interact with storage
+
 
 def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> tuple[list[str], list[str], int]:
     """Plan which files to include based on size constraints."""
@@ -351,7 +357,7 @@ def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> 
 def build_conversation_history(context: ThreadContext, model_context=None, read_files_func=None) -> tuple[str, int]:
     """
     Build formatted conversation history for tool prompts with embedded file contents.
-    
+
     This function remains synchronous as it only reads from the context object.
     """
     # Get the complete thread chain
@@ -362,7 +368,7 @@ def build_conversation_history(context: ThreadContext, model_context=None, read_
         all_turns = context.turns
         total_turns = len(context.turns)
         all_files = get_conversation_file_list(context)
-        logger.debug(f"[THREAD] Note: Thread chaining requires async implementation")
+        logger.debug("[THREAD] Note: Thread chaining requires async implementation")
     else:
         # Single thread, no parent chain
         all_turns = context.turns

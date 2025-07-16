@@ -558,7 +558,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         for handler in logger.handlers:
             if isinstance(handler, RotatingFileHandler):
                 handler.flush()
-        
+
         logger.debug(
             f"[CONVERSATION_DEBUG] Tool '{name}' resuming thread {continuation_id} with {len(arguments)} arguments"
         )
@@ -576,19 +576,15 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         for handler in logger.handlers:
             if isinstance(handler, RotatingFileHandler):
                 handler.flush()
-        
+
         try:
             # Add timeout to prevent indefinite hanging
-            arguments = await asyncio.wait_for(
-                reconstruct_thread_context(arguments),
-                timeout=30.0  # 30 second timeout
-            )
+            arguments = await asyncio.wait_for(reconstruct_thread_context(arguments), timeout=30.0)  # 30 second timeout
             logger.info("[MCP_DEBUG] reconstruct_thread_context completed")
         except asyncio.TimeoutError:
             logger.error(f"[MCP_DEBUG] reconstruct_thread_context timed out for thread {continuation_id}")
             raise ValueError(
-                "Request timed out while loading conversation history. "
-                "Please try again or start a new conversation."
+                "Request timed out while loading conversation history. " "Please try again or start a new conversation."
             )
         except Exception as e:
             logger.error(f"[MCP_DEBUG] reconstruct_thread_context failed: {e}", exc_info=True)
@@ -889,7 +885,7 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
     for handler in logger.handlers:
         if isinstance(handler, RotatingFileHandler):
             handler.flush()
-    
+
     # Import at module level to avoid potential async issues
     # (these are already imported at the top of the file if needed)
     from utils.conversation_memory import add_turn, build_conversation_history, get_thread
@@ -1253,26 +1249,26 @@ async def main():
 
 def run():
     """Console script entry point for zen-mcp-server."""
-    import sys
     import platform
-    
+
     # Fix for Windows asyncio issues
     if platform.system() == "Windows":
         # Use WindowsSelectorEventLoopPolicy for stdio-based protocols
         # Selector loop provides backpressure for pipe writes, preventing buffer overflow
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
+
         # Enable asyncio debug mode on Windows to help diagnose issues
         if os.getenv("ZEN_DEBUG_ASYNC", "").lower() == "true":
             asyncio.set_debug(True)
             import warnings
+
             warnings.simplefilter("default")  # Show asyncio warnings
-    
+
     try:
         # Create and set a new event loop explicitly
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
             loop.run_until_complete(main())
         finally:

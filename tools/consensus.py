@@ -242,12 +242,12 @@ class ConsensusTool(SimpleTool):
 
             # Get timeout for consensus operations
             consensus_timeout = self._get_consensus_timeout()
-            
+
             # Wrap each model consultation in a timeout
             initial_tasks = [
                 asyncio.wait_for(
                     self._consult_model(model_config, request, phase="initial"),
-                    timeout=consensus_timeout + 5  # Add 5 seconds buffer for the asyncio timeout
+                    timeout=consensus_timeout + 5,  # Add 5 seconds buffer for the asyncio timeout
                 )
                 for model_config in self.models_to_consult
             ]
@@ -299,7 +299,7 @@ class ConsensusTool(SimpleTool):
                                     self._consult_model_with_feedback(
                                         model_config, request, response, other_responses, phase="refinement"
                                     ),
-                                    timeout=consensus_timeout + 5  # Same timeout as initial phase
+                                    timeout=consensus_timeout + 5,  # Same timeout as initial phase
                                 )
                             )
 
@@ -444,7 +444,7 @@ class ConsensusTool(SimpleTool):
                     new_thread_id = await create_thread(tool_name="consensus", initial_request=initial_request_dict)
 
                     # Add user's initial turn
-                    add_turn(
+                    await add_turn(
                         new_thread_id,
                         "user",
                         request.prompt,
@@ -454,7 +454,7 @@ class ConsensusTool(SimpleTool):
                     )
 
                     # Add consensus result as assistant turn
-                    add_turn(
+                    await add_turn(
                         new_thread_id,
                         "assistant",
                         self._format_consensus_for_storage(response_data),
@@ -502,7 +502,9 @@ class ConsensusTool(SimpleTool):
 
             # Add model-specific continuation history for initial phase only
             if request.continuation_id and phase == "initial":
-                model_history = await self._build_model_specific_history(model_name, request.continuation_id, request.models)
+                model_history = await self._build_model_specific_history(
+                    model_name, request.continuation_id, request.models
+                )
 
                 if model_history:
                     prompt = f"{model_history}\n\nNEW QUESTION:\n{prompt}"
@@ -695,7 +697,9 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
 
         return consensus_responses
 
-    async def _build_model_specific_history(self, current_model: str, continuation_id: str, all_current_models: list) -> str:
+    async def _build_model_specific_history(
+        self, current_model: str, continuation_id: str, all_current_models: list
+    ) -> str:
         """Build conversation history specific to each model based on continuation context."""
         # Get previous consensus responses
         previous_consensus = await self._extract_previous_consensus(continuation_id)

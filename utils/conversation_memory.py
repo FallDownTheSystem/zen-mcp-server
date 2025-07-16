@@ -377,7 +377,9 @@ async def add_turn(
     try:
         storage = get_storage()
         key = f"thread:{thread_id}"
-        await storage.setex(key, CONVERSATION_TIMEOUT_SECONDS, context.model_dump_json())  # Refresh TTL to configured timeout
+        await storage.setex(
+            key, CONVERSATION_TIMEOUT_SECONDS, context.model_dump_json()
+        )  # Refresh TTL to configured timeout
         return True
     except Exception as e:
         logger.debug(f"[FLOW] Failed to save turn to storage: {type(e).__name__}")

@@ -54,7 +54,7 @@ class InMemoryStorage:
             expires_at = time.time() + ttl_seconds
             self._store[key] = (value, expires_at)
             logger.debug(f"Stored key {key} with TTL {ttl_seconds}s")
-            
+
             # Start cleanup task if not already running
             if self._cleanup_task is None:
                 self._cleanup_task = asyncio.create_task(self._cleanup_worker())

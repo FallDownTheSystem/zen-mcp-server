@@ -46,7 +46,7 @@ class InMemoryStorage:
             self._async_lock = asyncio.Lock()
 
     # Sync methods (original interface)
-    
+
     def set_with_ttl(self, key: str, ttl_seconds: int, value: str) -> None:
         """Store value with expiration time (sync version)"""
         with self._sync_lock:
@@ -73,7 +73,7 @@ class InMemoryStorage:
         self.set_with_ttl(key, ttl_seconds, value)
 
     # Async methods (new interface)
-    
+
     async def set_with_ttl_async(self, key: str, ttl_seconds: int, value: str) -> None:
         """Store value with expiration time (async version)"""
         self._ensure_async_lock()
@@ -102,7 +102,7 @@ class InMemoryStorage:
         await self.set_with_ttl_async(key, ttl_seconds, value)
 
     # Cleanup methods
-    
+
     def _cleanup_worker_sync(self):
         """Background thread that periodically cleans up expired entries"""
         while not self._shutdown:
