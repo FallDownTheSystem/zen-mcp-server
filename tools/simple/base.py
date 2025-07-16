@@ -432,7 +432,8 @@ class SimpleTool(BaseTool):
 
             # Generate content with provider abstraction - with timing
             start_time = time.time()
-            model_response = provider.generate_content(
+            # Use async version to avoid blocking the event loop
+            model_response = await provider.agenerate_content(
                 prompt=prompt,
                 model_name=self._current_model_name,
                 system_prompt=system_prompt,
