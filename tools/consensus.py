@@ -197,11 +197,11 @@ class ConsensusTool(SimpleTool):
 
     def _get_consensus_timeout(self) -> float:
         """Get the timeout for consensus model calls.
-        
+
         Uses environment variable CONSENSUS_MODEL_TIMEOUT if set, otherwise defaults to 10 minutes.
         This is separate from provider-level HTTP timeouts and specifically controls how long
         to wait for each model in the consensus workflow.
-        
+
         Returns:
             float: Timeout in seconds
         """
@@ -211,12 +211,72 @@ class ConsensusTool(SimpleTool):
         try:
             timeout = float(timeout_str)
             if timeout <= 0:
-                logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ({timeout}), using default of {default_timeout} seconds")
+                logger.warning(
+                    f"Invalid CONSENSUS_MODEL_TIMEOUT value ({timeout}), using default of {default_timeout} seconds"
+                )
                 return default_timeout
             return timeout
         except (ValueError, TypeError):
-            logger.warning(f"Invalid CONSENSUS_MODEL_TIMEOUT value ('{timeout_str}'), using default of {default_timeout} seconds")
+            logger.warning(
+                f"Invalid CONSENSUS_MODEL_TIMEOUT value ('{timeout_str}'), using default of {default_timeout} seconds"
+            )
             return default_timeout
+
+    def _get_model_timeout(self, model_name: str) -> float:
+        """Get model-specific timeout from capabilities.
+
+        Uses the timeout defined in model capabilities if available,
+        otherwise falls back to consensus timeout.
+
+        Args:
+            model_name: The model name to get timeout for
+
+        Returns:
+            float: Timeout in seconds for this specific model
+        """
+        try:
+            # Get the provider for this model
+            provider = self.get_model_provider(model_name)
+            if provider:
+                # Get model capabilities which include timeout
+                capabilities = provider.get_capabilities(model_name)
+                if hasattr(capabilities, "timeout"):
+                    timeout = capabilities.timeout
+                    # Log if using extended timeout
+                    if timeout > 300:  # More than 5 minutes
+                        logger.info(f"Using extended timeout of {timeout}s for model {model_name}")
+                    return timeout
+        except Exception as e:
+            logger.debug(f"Could not get model-specific timeout for {model_name}: {e}")
+
+        # Fall back to consensus timeout
+        return self._get_consensus_timeout()
+
+    def _get_phase_timeout(self, model_configs: list[dict]) -> float:
+        """Calculate appropriate timeout for a consensus phase.
+
+        Takes the maximum timeout among all models being consulted
+        and adds a buffer for coordination overhead.
+
+        Args:
+            model_configs: List of model configurations being consulted
+
+        Returns:
+            float: Phase timeout in seconds
+        """
+        # Get the maximum timeout needed among all models
+        max_model_timeout = 0.0
+        for config in model_configs:
+            model_name = config.get("model", "")
+            model_timeout = self._get_model_timeout(model_name)
+            max_model_timeout = max(max_model_timeout, model_timeout)
+
+        # Add 60 second buffer for coordination overhead
+        phase_timeout = max_model_timeout + 60.0
+        logger.debug(
+            f"Phase timeout calculated: {phase_timeout}s (max model timeout: {max_model_timeout}s + 60s buffer)"
+        )
+        return phase_timeout
 
     async def execute(self, arguments: dict[str, Any]) -> list:
         """Execute parallel consensus with optional cross-model feedback."""
@@ -232,25 +292,57 @@ class ConsensusTool(SimpleTool):
             # Phase 1: Parallel initial model consultations
             logger.info(f"Starting parallel consensus for {len(self.models_to_consult)} models")
 
+            # Create tasks as coroutines for better control
             initial_tasks = [
-                self._consult_model(model_config, request, phase="initial") for model_config in self.models_to_consult
+                asyncio.create_task(self._consult_model(model_config, request, phase="initial"))
+                for model_config in self.models_to_consult
             ]
 
-            # Execute all initial consultations in parallel
-            # return_exceptions=True ensures failures don't stop other models
-            initial_responses = await asyncio.gather(*initial_tasks, return_exceptions=True)
+            # Calculate phase timeout based on model requirements
+            phase_timeout = self._get_phase_timeout(self.models_to_consult)
+            logger.info(f"Phase 1 timeout set to {phase_timeout}s")
+
+            # Execute all initial consultations in parallel with phase timeout
+            # Using asyncio.wait() to preserve partial results on timeout
+            done, pending = await asyncio.wait(initial_tasks, timeout=phase_timeout)
+
+            # Cancel any pending tasks
+            for task in pending:
+                task.cancel()
 
             # Process results and handle any errors
             successful_initial = []
             failed_models = []
 
-            for i, response in enumerate(initial_responses):
+            # Build ordered responses list to maintain original model order
+            ordered_responses = []
+            for i, task in enumerate(initial_tasks):
+                if task in done:
+                    try:
+                        result = task.result()
+                        ordered_responses.append(result)
+                    except Exception as e:
+                        ordered_responses.append(e)
+                else:  # task in pending (timed out)
+                    model_name = self.models_to_consult[i].get("model", "unknown")
+                    timeout_error = TimeoutError(f"Phase timeout exceeded ({phase_timeout}s) for model {model_name}")
+                    ordered_responses.append(timeout_error)
+
+            # Now process ordered responses as before
+            for i, response in enumerate(ordered_responses):
                 if isinstance(response, Exception):
-                    logger.error(f"Model {self.models_to_consult[i].get('model', 'unknown')} failed: {response}")
+                    model_name = self.models_to_consult[i].get("model", "unknown")
+                    error_msg = str(response)
+
+                    if isinstance(response, TimeoutError):
+                        logger.warning(f"Model {model_name} failed: {error_msg}")
+                    else:
+                        logger.error(f"Model {model_name} failed: {error_msg}")
+
                     failed_models.append(
                         {
-                            "model": self.models_to_consult[i].get("model", "unknown"),
-                            "error": str(response),
+                            "model": model_name,
+                            "error": error_msg,
                             "phase": "initial",
                         }
                     )
@@ -284,16 +376,41 @@ class ConsensusTool(SimpleTool):
                                 )
                             )
 
-                # Execute refinement tasks in parallel
+                # Execute refinement tasks in parallel with phase timeout
                 if refinement_tasks:
-                    refinement_results = await asyncio.gather(*refinement_tasks, return_exceptions=True)
+                    # Create tasks for better control
+                    refinement_coroutines = [asyncio.create_task(task) for task in refinement_tasks]
 
-                    for result in refinement_results:
-                        if isinstance(result, Exception):
-                            logger.error(f"Refinement phase error: {result}")
-                            # Continue without this refinement
-                        else:
+                    # Calculate timeout for refinement phase
+                    # Use the same models that succeeded in initial phase
+                    refinement_model_configs = [
+                        mc
+                        for mc in self.models_to_consult
+                        if any(
+                            r.get("model") == mc.get("model")
+                            for r in successful_initial
+                            if r.get("status") == "success"
+                        )
+                    ]
+                    refinement_timeout = self._get_phase_timeout(refinement_model_configs)
+                    logger.info(f"Phase 2 (refinement) timeout set to {refinement_timeout}s")
+
+                    # Wait with timeout
+                    done, pending = await asyncio.wait(refinement_coroutines, timeout=refinement_timeout)
+
+                    # Cancel any pending tasks
+                    for task in pending:
+                        task.cancel()
+                        logger.warning("Refinement task timed out at phase level")
+
+                    # Process completed refinement tasks
+                    for task in done:
+                        try:
+                            result = task.result()
                             refined_responses.append(result)
+                        except Exception as e:
+                            logger.error(f"Refinement phase error: {e}")
+                            # Continue without this refinement
 
             # Prepare final responses - use refined if available, otherwise initial
             final_responses = []
@@ -503,7 +620,7 @@ class ConsensusTool(SimpleTool):
 
             # Call the model with timing and pass timeout to provider (use asyncio.to_thread for parallel execution)
             start_time = time.time()
-            consensus_timeout = self._get_consensus_timeout()
+            model_timeout = self._get_model_timeout(model_name)
             response = await asyncio.to_thread(
                 provider.generate_content,
                 prompt=prompt,
@@ -512,7 +629,7 @@ class ConsensusTool(SimpleTool):
                 temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode=request.reasoning_effort,
                 images=request.images if request.images else None,
-                timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
+                timeout=model_timeout,  # Pass model-specific timeout to HTTP client
             )
 
             end_time = time.time()
@@ -565,7 +682,7 @@ class ConsensusTool(SimpleTool):
 
             # Call the model with the feedback and timing, pass timeout to provider (use asyncio.to_thread for parallel execution)
             start_time = time.time()
-            consensus_timeout = self._get_consensus_timeout()
+            model_timeout = self._get_model_timeout(model_name)
             response = await asyncio.to_thread(
                 provider.generate_content,
                 prompt=feedback_prompt,
@@ -574,7 +691,7 @@ class ConsensusTool(SimpleTool):
                 temperature=request.temperature if request.temperature is not None else 0.2,
                 thinking_mode=request.reasoning_effort,
                 images=request.images if request.images else None,
-                timeout=consensus_timeout,  # Pass timeout to HTTP client for clean termination
+                timeout=model_timeout,  # Pass model-specific timeout to HTTP client
             )
 
             end_time = time.time()

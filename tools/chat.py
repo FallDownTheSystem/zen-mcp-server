@@ -179,12 +179,12 @@ class ChatTool(SimpleTool):
     async def prepare_prompt(self, request: ChatRequest) -> str:
         """
         Prepare the chat prompt with optional context files.
-        
+
         This creates a clean user prompt without duplicating system instructions.
         """
         # Get user content (handles prompt.txt files)
         user_content = self.handle_prompt_file_with_fallback(request)
-        
+
         # Build user prompt with file context and web search instructions (no system prompt)
         return self.build_user_prompt(user_content, request, "CONTEXT FILES")
 

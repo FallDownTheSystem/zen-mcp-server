@@ -159,6 +159,10 @@ class ModelCapabilities:
         default_factory=lambda: RangeTemperatureConstraint(0.0, 2.0, 0.7)
     )
 
+    # Timeout configuration for the model (in seconds)
+    # Models that do deep research or extended processing may need longer timeouts
+    timeout: float = 180.0  # Default 3 minutes for most models
+
     # Backward compatibility property for existing code
     @property
     def temperature_range(self) -> tuple[float, float]:

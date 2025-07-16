@@ -36,6 +36,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             temperature_constraint=create_temperature_constraint("fixed"),
             description="Strong reasoning (200K context) - Logical problems, code generation, systematic analysis",
             aliases=[],
+            timeout=300.0,  # 5 minutes for standard O3
         ),
         "o3-mini": ModelCapabilities(
             provider=ProviderType.OPENAI,
@@ -72,6 +73,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             temperature_constraint=create_temperature_constraint("fixed"),
             description="Professional-grade reasoning (200K context) - EXTREMELY EXPENSIVE: Only for the most complex problems requiring universe-scale complexity analysis OR when the user explicitly asks for this model. Use sparingly for critical architectural decisions or exceptionally complex debugging that other models cannot handle.",
             aliases=["o3-pro"],
+            timeout=1800.0,  # 30 minutes for O3-Pro complex analysis
         ),
         "o3-deep-research-2025-06-26": ModelCapabilities(
             provider=ProviderType.OPENAI,
@@ -90,6 +92,7 @@ class OpenAIModelProvider(OpenAICompatibleProvider):
             temperature_constraint=create_temperature_constraint("fixed"),
             description="Deep research model (200K context) - Specialized for comprehensive analysis, literature review, and complex research tasks",
             aliases=["o3-deep-research", "deep-research", "research", "o3-research"],
+            timeout=3600.0,  # 1 hour for deep research tasks
         ),
         "o4-mini": ModelCapabilities(
             provider=ProviderType.OPENAI,

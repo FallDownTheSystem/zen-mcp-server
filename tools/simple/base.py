@@ -744,12 +744,12 @@ Please provide a thoughtful, comprehensive response:"""
         """
         Build a user prompt with file context and web search instructions, but WITHOUT system prompt.
         This is useful for tools that want to send system prompt and user prompt separately.
-        
+
         Args:
             user_content: The main user request/content
             request: The validated request object
             file_context_title: Title for the file context section
-            
+
         Returns:
             User prompt with file context and web search instructions (no system prompt)
         """
@@ -765,16 +765,16 @@ Please provide a thoughtful, comprehensive response:"""
             self._actually_processed_files = processed_files
             if file_content:
                 user_content = f"{user_content}\n\n=== {file_context_title} ===\n{file_content}\n=== END CONTEXT ==="
-        
+
         # Check token limits
         self._validate_token_limit(user_content, "Content")
-        
+
         # Add web search instruction if enabled
         websearch_instruction = ""
         use_websearch = self.get_request_use_websearch(request)
         if use_websearch:
             websearch_instruction = self.get_websearch_instruction(use_websearch, self.get_websearch_guidance())
-        
+
         # Return user prompt with web search instructions (no system prompt)
         if websearch_instruction:
             return f"{user_content}\n\n{websearch_instruction}"

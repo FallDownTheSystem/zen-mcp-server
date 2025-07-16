@@ -1,5 +1,41 @@
 # Changelog
 
+## [6.4.0] - 2025-07-16
+
+### Added
+- **Model-Specific Timeout Configuration**: Added timeout field to ModelCapabilities for per-model timeout configuration
+  - Standard models: 180s (3 minutes)
+  - O3 models: 300s (5 minutes) 
+  - O3-Pro: 1800s (30 minutes)
+  - O3-Deep-Research: 3600s (1 hour)
+  - Timeouts are properly propagated to HTTP clients
+
+- **Phase-Level Timeouts for Consensus**: Implemented phase timeouts to prevent hanging on unresponsive models
+  - Phase timeout = max(all model timeouts) + 60s coordination buffer
+  - Uses `asyncio.wait()` with timeout parameter for proper task cancellation
+  - Partial results are preserved when some models timeout
+
+- **Comprehensive Timeout Tests**: Added test suites for timeout scenarios
+  - `test_consensus_timeouts.py` - 14 tests covering timeout configuration and enforcement
+  - `test_consensus_error_propagation.py` - 5 tests covering error handling
+
+- **Async Architecture Documentation**: Created detailed documentation at `docs/consensus-async-architecture.md`
+  - Explains timeout hierarchy (phase > model > HTTP)
+  - Documents configuration options and best practices
+  - Includes troubleshooting guide
+
+### Fixed
+- **Consensus Error Propagation**: Errors from model providers are now returned immediately without waiting for timeouts
+  - Uses proper exception handling in async tasks
+  - Maintains model order even with mixed success/error responses
+  - Refinement phase errors don't affect initial responses
+
+### Improved
+- **Thread Safety**: Verified all storage operations happen outside parallel execution phases
+  - No race conditions in conversation memory updates
+  - Atomic turn additions after consensus gathering
+  - Clean separation between parallel execution and storage
+
 ## [6.3.1] - 2025-07-14
 
 ### Fixed
