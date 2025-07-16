@@ -35,21 +35,21 @@ def chunk_text_response(text: str, chunk_size: int = MAX_CHUNK_SIZE) -> List[Tex
     if len(text) <= chunk_size:
         # No chunking needed
         return [TextContent(type="text", text=text)]
-    
+
     chunks = []
     total_chunks = (len(text) + chunk_size - 1) // chunk_size
-    
+
     for i in range(0, len(text), chunk_size):
         chunk = text[i:i + chunk_size]
         chunk_num = i // chunk_size + 1
-        
+
         # Add chunk metadata for reassembly
         if total_chunks > 1:
             chunk_prefix = f"[CHUNK {chunk_num}/{total_chunks}]\n"
             chunk = chunk_prefix + chunk
-            
+
         chunks.append(TextContent(type="text", text=chunk))
-    
+
     logger.debug(f"Split response into {len(chunks)} chunks")
     return chunks
 
@@ -68,7 +68,7 @@ def should_chunk_response(content: Any) -> bool:
     import platform
     if platform.system() != "Windows":
         return False
-    
+
     # Check if content is large enough to warrant chunking
     if isinstance(content, str):
         return len(content) > MAX_CHUNK_SIZE
@@ -79,7 +79,7 @@ def should_chunk_response(content: Any) -> bool:
             return len(json_str) > MAX_CHUNK_SIZE
         except Exception:
             return False
-    
+
     return False
 
 
@@ -98,7 +98,7 @@ def create_chunked_response(content: Any) -> List[TextContent]:
         text = json.dumps(content, indent=2, ensure_ascii=False)
     else:
         text = str(content)
-    
+
     if should_chunk_response(text):
         return chunk_text_response(text)
     else:

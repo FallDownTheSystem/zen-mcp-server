@@ -4,8 +4,8 @@ Test to verify which completion method is actually being called
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +28,7 @@ async def track_acompletion(*args, **kwargs):
 
 # Apply monkey patch
 import litellm
+
 original_completion = litellm.completion
 original_acompletion = litellm.acompletion
 litellm.completion = track_completion
@@ -39,7 +40,7 @@ from providers.litellm_provider import LiteLLMProvider
 async def test_provider_methods():
     """Test which methods the provider actually calls"""
     provider = LiteLLMProvider()
-    
+
     print("\n=== Testing generate_content (sync method) ===")
     try:
         # This should call completion()
@@ -51,7 +52,7 @@ async def test_provider_methods():
         print(f"Response: {response.content}")
     except Exception as e:
         print(f"Error: {e}")
-    
+
     print("\n=== Testing agenerate_content (async method) ===")
     try:
         # This should call acompletion()
@@ -63,7 +64,7 @@ async def test_provider_methods():
         print(f"Response: {response.content}")
     except Exception as e:
         print(f"Error: {e}")
-    
+
     print("\n=== Summary ===")
     print(f"Sync completion() calls: {len(completion_calls)}")
     print(f"Async acompletion() calls: {len(acompletion_calls)}")
@@ -71,13 +72,13 @@ async def test_provider_methods():
 
 async def main():
     import platform
-    
+
     print("=== Testing Which Completion Method is Called ===")
     print(f"Platform: {platform.system()}")
-    
+
     if platform.system() == "Windows":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    
+
     await test_provider_methods()
 
 

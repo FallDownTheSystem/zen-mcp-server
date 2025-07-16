@@ -252,12 +252,16 @@ def filter_disabled_tools(all_tools: dict[str, Any]) -> dict[str, Any]:
 
 # Initialize the tool registry with all available AI-powered tools
 # Each tool provides specialized functionality for different development tasks
-# Tools are instantiated once and reused across requests (stateless design)
-TOOLS = {
-    "chat": ChatTool(),  # Interactive development chat and brainstorming
-    "consensus": ConsensusTool(),  # Step-by-step consensus workflow with multi-model analysis
-}
-TOOLS = filter_disabled_tools(TOOLS)
+# IMPORTANT: Tools are now instantiated fresh for each request to avoid state pollution
+# TOOLS = {
+#     "chat": ChatTool(),  # Interactive development chat and brainstorming
+#     "consensus": ConsensusTool(),  # Step-by-step consensus workflow with multi-model analysis
+# }
+# TOOLS = filter_disabled_tools(TOOLS)
+
+# Define available tools for discovery
+AVAILABLE_TOOLS = ["chat", "consensus"]
+AVAILABLE_TOOLS = [tool for tool in AVAILABLE_TOOLS if tool not in os.getenv("DISABLED_TOOLS", "").split(",")]
 
 # Rich prompt templates for all tools
 PROMPT_TEMPLATES = {
@@ -455,8 +459,16 @@ async def handle_list_tools() -> list[Tool]:
         logger.debug(f"Could not log client info during list_tools: {e}")
     tools = []
 
-    # Add all registered AI-powered tools from the TOOLS registry
-    for tool in TOOLS.values():
+    # Add all registered AI-powered tools from available tools list
+    for tool_name in AVAILABLE_TOOLS:
+        # Create temporary tool instance to get metadata
+        if tool_name == "chat":
+            tool = ChatTool()
+        elif tool_name == "consensus":
+            tool = ConsensusTool()
+        else:
+            continue  # Skip unknown tools
+
         # Get optional annotations from the tool
         annotations = tool.get_annotations()
         tool_annotations = ToolAnnotations(**annotations) if annotations else None
@@ -599,122 +611,128 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         logger.info("[MCP_DEBUG] No continuation_id found, proceeding with fresh request")
 
     # Route to AI-powered tools that require Gemini API calls
-    logger.info(f"[MCP_DEBUG] Checking if tool '{name}' exists in TOOLS registry")
-    logger.info(f"[MCP_DEBUG] Available tools: {list(TOOLS.keys())}")
-    if name in TOOLS:
-        logger.info(f"[MCP_DEBUG] Tool '{name}' found in registry, executing")
-        logger.info(f"Executing tool '{name}' with {len(arguments)} parameter(s)")
-        tool = TOOLS[name]
+    logger.info(f"[MCP_DEBUG] Checking if tool '{name}' exists in available tools")
+    logger.info(f"[MCP_DEBUG] Available tools: {AVAILABLE_TOOLS}")
 
-        # EARLY MODEL RESOLUTION AT MCP BOUNDARY
-        # Resolve model before passing to tool - this ensures consistent model handling
-        # NOTE: Consensus tool is exempt as it handles multiple models internally
-        logger.info(f"[MCP_DEBUG] Starting model resolution for tool '{name}'")
-
-        from providers.registry import ModelProviderRegistry
-        from utils.file_utils import check_total_file_size
-        from utils.model_context import ModelContext
-
-        # Get model from arguments or use default
-        model_name = arguments.get("model") or DEFAULT_MODEL
-        logger.info(f"[MCP_DEBUG] Initial model for {name}: {model_name}")
-        logger.debug(f"Initial model for {name}: {model_name}")
-
-        # Parse model:option format if present
-        logger.info("[MCP_DEBUG] Parsing model format")
-        model_name, model_option = parse_model_option(model_name)
-        if model_option:
-            logger.debug(f"Parsed model format - model: '{model_name}', option: '{model_option}'")
-
-        # Consensus tool handles its own model configuration validation
-        # No special handling needed at server level
-
-        # Skip model resolution for tools that don't require models (e.g., planner)
-        logger.info("[MCP_DEBUG] Checking if tool requires model")
-        if not tool.requires_model():
-            logger.info(f"[MCP_DEBUG] Tool {name} doesn't require model, executing directly")
-            logger.debug(f"Tool {name} doesn't require model resolution - skipping model validation")
-            # Execute tool directly without model context
-            return await tool.execute(arguments)
-
-        # Handle auto mode at MCP boundary - resolve to specific model
-        if model_name.lower() == "auto":
-            # Get tool category to determine appropriate model
-            tool_category = tool.get_model_category()
-            resolved_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
-            logger.info(f"Auto mode resolved to {resolved_model} for {name} (category: {tool_category.value})")
-            model_name = resolved_model
-            # Update arguments with resolved model
-            arguments["model"] = model_name
-
-        # Validate model availability at MCP boundary
-        provider = ModelProviderRegistry.get_provider_for_model(model_name)
-        if not provider:
-            # Get list of available models for error message
-            available_models = list(ModelProviderRegistry.get_available_models(respect_restrictions=True).keys())
-            tool_category = tool.get_model_category()
-            suggested_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
-
-            error_message = (
-                f"Model '{model_name}' is not available with current API keys. "
-                f"Available models: {', '.join(available_models)}. "
-                f"Suggested model for {name}: '{suggested_model}' "
-                f"(category: {tool_category.value})"
-            )
-            error_output = ToolOutput(
-                status="error",
-                content=error_message,
-                content_type="text",
-                metadata={"tool_name": name, "requested_model": model_name},
-            )
-            return [TextContent(type="text", text=error_output.model_dump_json())]
-
-        # Create model context with resolved model and option
-        model_context = ModelContext(model_name, model_option)
-        arguments["_model_context"] = model_context
-        arguments["_resolved_model_name"] = model_name
-        logger.debug(
-            f"Model context created for {model_name} with {model_context.capabilities.context_window} token capacity"
-        )
-        if model_option:
-            logger.debug(f"Model option stored in context: '{model_option}'")
-
-        # EARLY FILE SIZE VALIDATION AT MCP BOUNDARY
-        # Check file sizes before tool execution using resolved model
-        if "files" in arguments and arguments["files"]:
-            logger.debug(f"Checking file sizes for {len(arguments['files'])} files with model {model_name}")
-            file_size_check = check_total_file_size(arguments["files"], model_name)
-            if file_size_check:
-                logger.warning(f"File size check failed for {name} with model {model_name}")
-                return [TextContent(type="text", text=ToolOutput(**file_size_check).model_dump_json())]
-
-        # Execute tool with pre-resolved model context
-        logger.info(f"[MCP_DEBUG] About to execute tool '{name}' with resolved model '{model_name}'")
-        logger.info(f"[MCP_DEBUG] Tool execution arguments keys: {list(arguments.keys())}")
-
-        try:
-            result = await tool.execute(arguments)
-            logger.info(f"[MCP_DEBUG] Tool '{name}' execution completed successfully")
-            logger.info(f"Tool '{name}' execution completed")
-        except Exception as e:
-            logger.error(f"[MCP_DEBUG] Tool '{name}' execution failed with error: {e}")
-            logger.error(f"[MCP_DEBUG] Error type: {type(e)}")
-            raise
-
-        # Log completion to activity file
-        try:
-            mcp_activity_logger = logging.getLogger("mcp_activity")
-            mcp_activity_logger.info(f"TOOL_COMPLETED: {name}")
-            logger.info("[MCP_DEBUG] Activity log completion written")
-        except Exception as e:
-            logger.error(f"[MCP_DEBUG] Failed to write completion log: {e}")
-
-        logger.info(f"[MCP_DEBUG] Returning result from tool '{name}'")
-        return result
-
-    # Handle unknown tool requests gracefully
+    # Create fresh tool instance to avoid state pollution
+    if name == "chat":
+        logger.info("[MCP_DEBUG] Creating fresh ChatTool instance")
+        tool = ChatTool()
+    elif name == "consensus":
+        logger.info("[MCP_DEBUG] Creating fresh ConsensusTool instance")
+        tool = ConsensusTool()
     else:
+        # Handle unknown tool requests gracefully
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+    logger.info(f"[MCP_DEBUG] Tool '{name}' instance created, executing")
+    logger.info(f"Executing tool '{name}' with {len(arguments)} parameter(s)")
+
+    # EARLY MODEL RESOLUTION AT MCP BOUNDARY
+    # Resolve model before passing to tool - this ensures consistent model handling
+    # NOTE: Consensus tool is exempt as it handles multiple models internally
+    logger.info(f"[MCP_DEBUG] Starting model resolution for tool '{name}'")
+
+    from providers.registry import ModelProviderRegistry
+    from utils.file_utils import check_total_file_size
+    from utils.model_context import ModelContext
+
+    # Get model from arguments or use default
+    model_name = arguments.get("model") or DEFAULT_MODEL
+    logger.info(f"[MCP_DEBUG] Initial model for {name}: {model_name}")
+    logger.debug(f"Initial model for {name}: {model_name}")
+
+    # Parse model:option format if present
+    logger.info("[MCP_DEBUG] Parsing model format")
+    model_name, model_option = parse_model_option(model_name)
+    if model_option:
+        logger.debug(f"Parsed model format - model: '{model_name}', option: '{model_option}'")
+
+    # Consensus tool handles its own model configuration validation
+    # No special handling needed at server level
+
+    # Skip model resolution for tools that don't require models (e.g., planner)
+    logger.info("[MCP_DEBUG] Checking if tool requires model")
+    if not tool.requires_model():
+        logger.info(f"[MCP_DEBUG] Tool {name} doesn't require model, executing directly")
+        logger.debug(f"Tool {name} doesn't require model resolution - skipping model validation")
+        # Execute tool directly without model context
+        return await tool.execute(arguments)
+
+    # Handle auto mode at MCP boundary - resolve to specific model
+    if model_name.lower() == "auto":
+        # Get tool category to determine appropriate model
+        tool_category = tool.get_model_category()
+        resolved_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
+        logger.info(f"Auto mode resolved to {resolved_model} for {name} (category: {tool_category.value})")
+        model_name = resolved_model
+        # Update arguments with resolved model
+        arguments["model"] = model_name
+
+    # Validate model availability at MCP boundary
+    provider = ModelProviderRegistry.get_provider_for_model(model_name)
+    if not provider:
+        # Get list of available models for error message
+        available_models = list(ModelProviderRegistry.get_available_models(respect_restrictions=True).keys())
+        tool_category = tool.get_model_category()
+        suggested_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
+
+        error_message = (
+            f"Model '{model_name}' is not available with current API keys. "
+            f"Available models: {', '.join(available_models)}. "
+            f"Suggested model for {name}: '{suggested_model}' "
+            f"(category: {tool_category.value})"
+        )
+        error_output = ToolOutput(
+            status="error",
+            content=error_message,
+            content_type="text",
+            metadata={"tool_name": name, "requested_model": model_name},
+        )
+        return [TextContent(type="text", text=error_output.model_dump_json())]
+
+    # Create model context with resolved model and option
+    model_context = ModelContext(model_name, model_option)
+    arguments["_model_context"] = model_context
+    arguments["_resolved_model_name"] = model_name
+    logger.debug(
+        f"Model context created for {model_name} with {model_context.capabilities.context_window} token capacity"
+    )
+    if model_option:
+        logger.debug(f"Model option stored in context: '{model_option}'")
+
+    # EARLY FILE SIZE VALIDATION AT MCP BOUNDARY
+    # Check file sizes before tool execution using resolved model
+    if "files" in arguments and arguments["files"]:
+        logger.debug(f"Checking file sizes for {len(arguments['files'])} files with model {model_name}")
+        file_size_check = check_total_file_size(arguments["files"], model_name)
+        if file_size_check:
+            logger.warning(f"File size check failed for {name} with model {model_name}")
+            return [TextContent(type="text", text=ToolOutput(**file_size_check).model_dump_json())]
+
+    # Execute tool with pre-resolved model context
+    logger.info(f"[MCP_DEBUG] About to execute tool '{name}' with resolved model '{model_name}'")
+    logger.info(f"[MCP_DEBUG] Tool execution arguments keys: {list(arguments.keys())}")
+
+    try:
+        result = await tool.execute(arguments)
+        logger.info(f"[MCP_DEBUG] Tool '{name}' execution completed successfully")
+        logger.info(f"Tool '{name}' execution completed")
+    except Exception as e:
+        logger.error(f"[MCP_DEBUG] Tool '{name}' execution failed with error: {e}")
+        logger.error(f"[MCP_DEBUG] Error type: {type(e)}")
+        raise
+
+    # Log completion to activity file
+    try:
+        mcp_activity_logger = logging.getLogger("mcp_activity")
+        mcp_activity_logger.info(f"TOOL_COMPLETED: {name}")
+        logger.info("[MCP_DEBUG] Activity log completion written")
+    except Exception as e:
+        logger.error(f"[MCP_DEBUG] Failed to write completion log: {e}")
+
+    logger.info(f"[MCP_DEBUG] Returning result from tool '{name}'")
+    return result
 
 
 def parse_model_option(model_string: str) -> tuple[str, Optional[str]]:
@@ -1055,7 +1073,7 @@ async def handle_list_prompts() -> list[Prompt]:
     prompts = []
 
     # Add a prompt for each tool with rich templates
-    for tool_name, tool in TOOLS.items():
+    for tool_name in AVAILABLE_TOOLS:
         if tool_name in PROMPT_TEMPLATES:
             # Use the rich template
             template_info = PROMPT_TEMPLATES[tool_name]
@@ -1068,6 +1086,14 @@ async def handle_list_prompts() -> list[Prompt]:
             )
         else:
             # Fallback for any tools without templates (shouldn't happen)
+            # Create tool instance just to get name
+            if tool_name == "chat":
+                tool = ChatTool()
+            elif tool_name == "consensus":
+                tool = ConsensusTool()
+            else:
+                continue
+
             prompts.append(
                 Prompt(
                     name=tool_name,
@@ -1137,7 +1163,7 @@ async def handle_get_prompt(name: str, arguments: dict[str, Any] = None) -> GetP
                 break
 
         # If not found, check if it's a direct tool name
-        if not tool_name and name in TOOLS:
+        if not tool_name and name in AVAILABLE_TOOLS:
             tool_name = name
             template_info = {
                 "name": name,
@@ -1238,7 +1264,7 @@ async def main():
 
     # Import here to avoid circular imports
 
-    logger.info(f"Available tools: {list(TOOLS.keys())}")
+    logger.info(f"Available tools: {AVAILABLE_TOOLS}")
     logger.info("Server ready - waiting for tool requests...")
 
     # Run the server using stdio transport (standard input/output)
@@ -1275,7 +1301,7 @@ def run():
         # Use WindowsSelectorEventLoopPolicy for stdio-based protocols
         # Selector loop provides backpressure for pipe writes, preventing buffer overflow
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
+
         # Apply Windows-specific stdio patches to prevent "Invalid argument" errors
         from utils.stdio_wrapper import patch_stdio_for_windows
         patch_stdio_for_windows()
