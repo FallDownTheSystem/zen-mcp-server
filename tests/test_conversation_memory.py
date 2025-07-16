@@ -139,7 +139,8 @@ class TestConversationMemory:
         assert success is False
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_build_conversation_history(self, project_path):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history(self, project_path):
         """Test building conversation history format with files and speaker identification"""
         from providers.registry import ModelProviderRegistry
 
@@ -186,7 +187,7 @@ class TestConversationMemory:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context, model_context=None)
+        history, tokens = await build_conversation_history(context, model_context=None)
 
         # Test basic structure
         assert "CONVERSATION HISTORY" in history
@@ -216,7 +217,8 @@ class TestConversationMemory:
         assert "Hello world" in history
         assert "Project Documentation" in history
 
-    def test_build_conversation_history_empty(self):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history_empty(self):
         """Test building history with no turns"""
         test_uuid = "12345678-1234-1234-1234-123456789012"
 
@@ -229,7 +231,7 @@ class TestConversationMemory:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context, model_context=None)
+        history, tokens = await build_conversation_history(context, model_context=None)
         assert history == ""
         assert tokens == 0
 
@@ -366,7 +368,8 @@ class TestConversationFlow:
         )
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_dynamic_max_turns_configuration(self):
+    @pytest.mark.asyncio
+    async def test_dynamic_max_turns_configuration(self):
         """Test that all functions respect MAX_CONVERSATION_TURNS configuration"""
         from providers.registry import ModelProviderRegistry
 
@@ -395,7 +398,7 @@ class TestConversationFlow:
                 initial_context={},
             )
 
-            history, tokens = build_conversation_history(context, model_context=None)
+            history, tokens = await build_conversation_history(context, model_context=None)
             expected_turn_text = f"Turn {test_max}/{MAX_CONVERSATION_TURNS}"
             assert expected_turn_text in history
 
@@ -497,7 +500,8 @@ class TestConversationFlow:
 
     @patch("utils.conversation_memory.get_storage")
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_conversation_with_files_and_context_preservation(self, mock_storage):
+    @pytest.mark.asyncio
+    async def test_conversation_with_files_and_context_preservation(self, mock_storage):
         """Test complete conversation flow with file tracking and context preservation"""
         from providers.registry import ModelProviderRegistry
 
@@ -694,7 +698,8 @@ class TestConversationFlow:
         assert len(retrieved_context.turns) == 1
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_token_limit_optimization_in_conversation_history(self):
+    @pytest.mark.asyncio
+    async def test_token_limit_optimization_in_conversation_history(self):
         """Test that build_conversation_history efficiently handles token limits"""
         import os
         import tempfile
@@ -737,7 +742,7 @@ class TestConversationFlow:
             )
 
             # Build conversation history (should handle token limits gracefully)
-            history, tokens = build_conversation_history(context, model_context=None)
+            history, tokens = await build_conversation_history(context, model_context=None)
 
             # Verify the history was built successfully
             assert "=== CONVERSATION HISTORY" in history

@@ -362,7 +362,7 @@ class SimpleTool(BaseTool):
                             )
 
                         # Build conversation history with updated thread context
-                        conversation_history, conversation_tokens = build_conversation_history(
+                        conversation_history, conversation_tokens = await build_conversation_history(
                             thread_context, self._model_context
                         )
 
@@ -686,7 +686,7 @@ class SimpleTool(BaseTool):
 
     # Convenience methods for common tool patterns
 
-    def build_standard_prompt(
+    async def build_standard_prompt(
         self, system_prompt: str, user_content: str, request, file_context_title: str = "CONTEXT FILES"
     ) -> str:
         """
@@ -710,7 +710,7 @@ class SimpleTool(BaseTool):
         # Add context files if provided
         files = self.get_request_files(request)
         if files:
-            file_content, processed_files = self._prepare_file_content_for_prompt(
+            file_content, processed_files = await self._prepare_file_content_for_prompt(
                 files,
                 self.get_request_continuation_id(request),
                 "Context files",
@@ -740,7 +740,7 @@ Please provide a thoughtful, comprehensive response:"""
 
         return full_prompt
 
-    def build_user_prompt(self, user_content: str, request, file_context_title: str = "CONTEXT FILES") -> str:
+    async def build_user_prompt(self, user_content: str, request, file_context_title: str = "CONTEXT FILES") -> str:
         """
         Build a user prompt with file context and web search instructions, but WITHOUT system prompt.
         This is useful for tools that want to send system prompt and user prompt separately.
@@ -756,7 +756,7 @@ Please provide a thoughtful, comprehensive response:"""
         # Add context files if provided
         files = self.get_request_files(request)
         if files:
-            file_content, processed_files = self._prepare_file_content_for_prompt(
+            file_content, processed_files = await self._prepare_file_content_for_prompt(
                 files,
                 self.get_request_continuation_id(request),
                 "Context files",
@@ -917,7 +917,7 @@ Please provide a thoughtful, comprehensive response:"""
 
         return None
 
-    def prepare_chat_style_prompt(self, request, system_prompt: str = None) -> str:
+    async def prepare_chat_style_prompt(self, request, system_prompt: str = None) -> str:
         """
         Prepare a prompt using Chat tool-style patterns.
 
@@ -949,7 +949,7 @@ Please provide a thoughtful, comprehensive response:"""
         self.get_websearch_guidance = lambda: websearch_guidance
 
         try:
-            full_prompt = self.build_standard_prompt(system_prompt, user_content, request, "CONTEXT FILES")
+            full_prompt = await self.build_standard_prompt(system_prompt, user_content, request, "CONTEXT FILES")
         finally:
             # Restore original guidance method
             self.get_websearch_guidance = original_guidance

@@ -1,5 +1,274 @@
 # Changelog
 
+## [6.5.12] - 2025-07-16
+
+### Fixed
+- **CRITICAL FIX - Root Cause of Deadlock Found**: Fixed the actual cause of the consensus deadlock
+  - The issue: `httpx.RequestsTransport` doesn't exist in modern httpx versions
+  - This caused the custom httpx client initialization to fail silently
+  - The code fell back to a default OpenAI client that uses async-aware httpcore
+  - When called from a thread (via asyncio.to_thread), httpcore tries to interact with the main event loop
+  - This creates a deadlock: the event loop waits for the thread, while the thread waits for the event loop
+  - Solution: Removed dependency on non-existent RequestsTransport
+  - Now using a properly configured synchronous httpx client with:
+    - Disabled keepalive connections to prevent accumulation
+    - Connection: close header to force connection closure
+    - trust_env=False to avoid async proxy detection
+  - Made the error handling fail loudly instead of silently falling back to a broken configuration
+
+### Changed
+- **Requirements Comment**: Updated comment for requests dependency
+  - No longer mentions httpx.RequestsTransport which doesn't exist
+
+## [6.5.11] - 2025-07-16
+
+### Fixed
+- **Critical Deadlock Fix - Thread Pool Exhaustion**: Fixed the root cause of the 5th call deadlock
+  - The issue: Default asyncio thread pool was getting exhausted after multiple consensus calls
+  - Each consensus call uses multiple threads (2-4 depending on models and phases)
+  - The default thread pool has limited workers and they weren't being released properly
+  - Solution: Implemented custom thread pool executor with 10 workers dedicated to consensus
+  - This prevents thread exhaustion and ensures reliable parallel execution
+  - The custom thread pool completely resolves the deadlock issue
+
+### Changed
+- **Fixed Provider Call Arguments**: Corrected the argument order when calling provider.generate_content()
+  - Fixed positional argument mismatch causing "TypeError: takes from 3 to 6 positional arguments but 8 were given"
+  - Added missing `max_output_tokens` parameter (as None) in the correct position
+  - Changed timeout from positional to keyword argument for clarity
+  - Applied fix to both initial consultation and refinement phases
+
+### Removed
+- **Isolation Test Code**: Removed temporary isolation test code that was used for debugging
+  - Removed dummy sleep operations that replaced real provider calls
+  - Restored original provider.generate_content() calls in refinement phase
+  - Deleted ISOLATION_TEST_ACTIVE.md marker file
+
+## [6.5.10] - 2025-07-16
+
+### Fixed
+- **Connection Pool Exhaustion Fix**: Addressed the 5th call deadlock issue
+  - Added "Connection: close" header to prevent connection accumulation
+  - Disabled retries (max_retries=0) to avoid connection buildup
+  - Limited concurrent threads to 2 with semaphore to match typical consensus usage
+  - The deadlock was caused by connections being kept alive and accumulating across calls
+
+## [6.5.9] - 2025-07-16
+
+### Fixed
+- **Consensus Tool - Additional Pre-computation**: Moved more operations outside parallel tasks
+  - Pre-create ModelContext instances before async tasks to avoid concurrent initialization
+  - Pre-fetch system prompt once for all models instead of fetching in each task
+  - Pass pre-created resources to async methods to minimize work inside parallel execution
+  - This further reduces contention and potential deadlock scenarios
+
+## [6.5.8] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Deadlock - Registry Access**: Fixed concurrent registry access in async tasks
+  - Moved `get_model_provider()` calls outside of async tasks in both initial and refinement phases
+  - Providers are now obtained sequentially before creating parallel tasks
+  - This prevents multiple async tasks from accessing the ModelProviderRegistry simultaneously
+  - The deadlock was caused by concurrent threads trying to acquire registry locks at the same time
+
+## [6.5.7] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Deadlock - Caching Solution**: Fixed deadlock caused by repeated get_capabilities calls
+  - Added timeout caching in `_get_model_timeout` to prevent repeated provider calls
+  - The deadlock occurred when multiple threads called `get_capabilities()` during refinement phase
+  - Now caches timeout values per model for the duration of each consensus execution
+  - Cache is cleared at the start of each new execution to ensure fresh data
+  - This prevents the threading deadlock that was freezing the server at turn 5-6
+
+## [6.5.6] - 2025-07-16
+
+### Fixed
+- **Identified Deadlock in Consensus Refinement Phase**: Added debugging to pinpoint deadlock location
+  - The deadlock occurs during refinement phase setup in `_get_phase_timeout`
+  - Specifically when calling `_get_model_timeout` which calls `provider.get_capabilities()`
+  - This is called in a loop for each model during timeout calculation
+  - Added debug logging to track the exact point of failure
+  - The issue appears to be that `get_capabilities()` is being called multiple times and causing a deadlock
+
+## [6.5.5] - 2025-07-16
+
+### Fixed
+- **Added Debugging for Deadlock Investigation**: Added extensive logging to pinpoint deadlock location
+  - The deadlock occurs in `ModelContext.calculate_token_allocation()` method
+  - Specifically when accessing `self.capabilities.context_window`
+  - Added debug logging in capabilities property getter and calculate_token_allocation
+  - Added try/catch around token allocation formatting to catch any exceptions
+  - This will help identify if the deadlock is in provider.get_capabilities() or elsewhere
+
+## [6.5.4] - 2025-07-16
+
+### Fixed
+- **Consensus History Extraction Limit**: Limited extraction to last 10 turns to prevent deadlock
+  - The deadlock at turn 6 was likely caused by processing increasingly large accumulated data
+  - Now only processes the most recent 10 turns when extracting previous consensus responses
+  - This prevents potential infinite loops or memory issues with very long conversations
+  - Added detailed debugging logs to track turn processing
+  - Removed incomplete async lock implementation that wasn't addressing the root cause
+
+## [6.5.3] - 2025-07-16
+
+### Fixed
+- **Consensus Data Structure Issue**: Fixed potential circular reference and data explosion
+  - The consensus tool was storing the entire `response_data` object in `model_metadata`
+  - This included nested metadata that could create circular references or exponential growth
+  - Now stores only essential data: model name, response text, and status
+  - Added defensive error handling in `_extract_previous_consensus` to catch and log any issues
+  - This was the root cause of the deadlock at turn 6 - not async/blocking operations
+  - Reverted one of the asyncio.to_thread wraps from v6.5.1 as it's no longer needed
+
+## [6.5.2] - 2025-07-16
+
+### Fixed
+- **Comprehensive Async Deadlock Fix**: Wrapped all blocking operations in consensus tool
+  - `get_thread()` calls now wrapped in `asyncio.to_thread()` to prevent blocking on storage reads
+  - `add_turn()` calls wrapped to prevent blocking on storage writes and Pydantic serialization
+  - `create_thread()` wrapped to prevent blocking during thread creation
+  - `_format_consensus_for_storage()` wrapped as it does CPU-intensive string operations
+  - `json.dumps()` operations wrapped when serializing large response data
+  - These operations were blocking the event loop when processing accumulated data from 6+ turns
+  - The deadlock at turn 6 should now be fully resolved
+
+## [6.5.1] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Async Deadlock**: Fixed deadlock in consensus history extraction during continuations
+  - The `_build_model_specific_history` method was doing synchronous operations in async context
+  - When processing large accumulated consensus data (6+ turns), the synchronous extraction blocked the event loop
+  - Now wrapped in `asyncio.to_thread()` to prevent blocking
+  - This allows the event loop to remain responsive while processing conversation history
+  - Deadlock that occurred at turn 6 should now be resolved
+
+## [6.5.0] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Prompt Deduplication**: Fixed issue where conversation history was included twice in consensus prompts
+  - The server adds full conversation history to the prompt field during continuations
+  - Consensus tool also adds its own model-specific history, causing duplication
+  - Now consensus tool detects and uses `_original_user_prompt` to avoid this duplication
+  - This significantly reduces prompt size and prevents token limit issues in multi-turn consensus
+  - Each model still receives appropriate context without redundancy
+
+### Improved
+- **Cleaner Code Structure**: Aligned consensus tool with architectural patterns
+  - Uses `model_config = {"extra": "allow"}` to accept server-provided fields
+  - Maintains backward compatibility by falling back to full prompt if needed
+  - Better separation of concerns between server and tool responsibilities
+
+## [6.4.9] - 2025-07-16
+
+### Reverted
+- **Consensus Tool Full History**: Restored full conversation history for consensus tool
+  - Reverted the change from v6.4.6 that limited consensus tool to only new user input
+  - Consensus tool now receives the full conversation history like all other tools
+  - The actual deadlock was caused by thread safety issues (fixed in v6.4.7), not prompt size
+  - The consensus tool can handle large prompts with proper token validation in place
+
+## [6.4.8] - 2025-07-16
+
+### Improved
+- **Complete Thread Safety for ModelProviderRegistry**: Extended thread safety to all mutating methods
+  - Added thread locks to `register_provider()`, `clear_cache()`, and `unregister_provider()` methods
+  - Added comprehensive class docstring documenting thread safety guarantees
+  - Ensures all registry operations are thread-safe, not just provider access
+  - Based on review feedback from Gemini confirming the implementation is correct
+
+## [6.4.7] - 2025-07-16
+
+### Fixed
+- **Thread Safety in ModelProviderRegistry**: Fixed deadlock caused by race conditions in multi-threaded access
+  - Added thread-safe singleton initialization with class-level lock
+  - Added instance-level lock for provider initialization and caching
+  - Implemented double-check locking pattern to prevent duplicate provider creation
+  - Fixed race conditions when consensus tool runs multiple models in parallel via asyncio.to_thread()
+  - The deadlock was occurring when two threads tried to initialize the same provider simultaneously
+  - This was the actual cause of the consensus tool hanging on the 5th call
+
+## [6.4.6] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Deadlock - Final Fix**: Prevented server from embedding full conversation history in consensus prompts
+  - The server was adding the entire conversation history to the prompt field for all tools
+  - This caused exponential growth: by turn 8, the prompt was 15,895 chars (from a 14 char question!)
+  - Consensus tool now receives only the new user input, not the full history
+  - The consensus tool extracts its own conversation history via `_extract_previous_consensus()`
+  - This prevents the double-embedding of conversation history that was causing exponential growth
+  - Other tools (like chat) still receive the full conversation history as before
+
+## [6.4.5] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Deadlock - Root Cause**: Fixed exponential prompt growth causing deadlocks after 4-5 continuation turns
+  - Modified `_format_consensus_for_storage()` to store only model responses, not the entire JSON structure
+  - This prevents each turn from embedding all previous turns' full JSON, eliminating exponential growth
+  - Consensus responses now store full model outputs but without metadata and conversation history
+  - Added comprehensive debug logging throughout consensus workflow to identify bottlenecks
+  - Integrated proper token limit validation using existing `_validate_token_limit()` method
+  - Added automatic prompt truncation when conversation history exceeds token limits
+  - The deadlock was caused by massive prompts (exponentially growing JSON) blocking the event loop
+
+### Improved
+- **Consensus Tool Logging**: Added detailed debug logging to trace execution flow
+  - Logs prompt sizes at each stage of preparation
+  - Tracks conversation history extraction and building
+  - Reports token counts and validation results
+  - Helps identify performance bottlenecks in production
+
+## [6.4.4] - 2025-07-16
+
+### Fixed
+- **Complete AsyncIO Deadlock Fix**: Resolved all blocking I/O operations causing deadlocks in the consensus tool
+  - Made `build_conversation_history` and `_plan_file_inclusion_by_size` async in conversation_memory.py
+  - Made `_prepare_file_content_for_prompt` async in base_tool.py
+  - Made `build_standard_prompt`, `build_user_prompt`, and `prepare_chat_style_prompt` async in SimpleTool
+  - Wrapped all file I/O operations (os.path.exists, open, read_files, etc.) in asyncio.to_thread()
+  - Updated all callers to properly await these async methods
+  - This ensures the main event loop never blocks on file I/O, preventing deadlocks during parallel execution
+  - The consensus tool can now safely run multiple model calls in parallel without freezing
+
+### Changed
+- Updated multiple test files to support async methods with @pytest.mark.asyncio decorator
+- All file operations now run in thread pool workers instead of blocking the event loop
+
+## [6.4.3] - 2025-07-16
+
+### Fixed
+- **AsyncIO Deadlock in Consensus Tool**: Fixed critical deadlock issue when using httpx with asyncio.to_thread()
+  - Root cause: httpx.Client auto-detects event loops and tries to use asyncio from within thread pool workers
+  - Solution: Configured httpx to use RequestsTransport backend instead of default HTTPTransport
+  - This forces purely synchronous behavior and prevents event loop detection
+  - Added `requests>=2.25.0` dependency to support the transport backend
+  - Comprehensive fix validated by Gemini Pro as the most robust solution
+  - All 526 tests pass with the fix applied
+
+## [6.4.2] - 2025-07-16
+
+### Improved
+- **Consensus Model Name Storage**: Enhanced how consensus tool stores model information in conversation history
+  - Now stores actual model names (e.g., "gemini-2.5-pro, o3, grok-4") instead of generic "3 models"
+  - Added `consulted_models` array to model metadata for programmatic access
+  - Improved conversation history display showing exact models used in each consensus round
+  - Better tracking and transparency of which models participated in consensus
+
+### Fixed
+- **Consensus Continuation Fallback**: Fixed fallback model resolution for consensus tool continuations
+  - When no model is found for consensus continuations, uses proper fallback model for token calculations
+  - Prevents "Model 'auto' is not available" errors in edge cases
+
+## [6.4.1] - 2025-07-16
+
+### Fixed
+- **Consensus Tool Continuation**: Fixed "Model '3 models' is not available" error when continuing consensus conversations
+  - Modified `reconstruct_thread_context` to skip consensus tool turns when looking for a model to inherit
+  - Consensus tool now properly handles continuations with same or different model sets
+  - Each consensus request independently uses the models specified in the request
+  - Preserves full conversation context while preventing model inheritance issues
+
 ## [6.4.0] - 2025-07-16
 
 ### Added

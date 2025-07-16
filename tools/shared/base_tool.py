@@ -9,6 +9,7 @@ common functionality for request validation, error handling, model management,
 conversation handling, file processing, and response formatting.
 """
 
+import asyncio
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -870,7 +871,7 @@ class BaseTool(ABC):
             }
         return None
 
-    def _prepare_file_content_for_prompt(
+    async def _prepare_file_content_for_prompt(
         self,
         request_files: list[str],
         continuation_id: Optional[str],
@@ -974,12 +975,13 @@ class BaseTool(ABC):
                 # Before calling read_files, expand directories to get individual file paths
                 from utils.file_utils import expand_paths
 
-                expanded_files = expand_paths(files_to_embed)
+                expanded_files = await asyncio.to_thread(expand_paths, files_to_embed)
                 logger.debug(
                     f"[FILES] {self.name}: Expanded {len(files_to_embed)} paths to {len(expanded_files)} individual files"
                 )
 
-                file_content = read_files(
+                file_content = await asyncio.to_thread(
+                    read_files,
                     files_to_embed,
                     max_tokens=effective_max_tokens + reserve_tokens,
                     reserve_tokens=reserve_tokens,

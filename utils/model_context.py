@@ -81,7 +81,12 @@ class ModelContext:
     def capabilities(self) -> ModelCapabilities:
         """Get model capabilities lazily."""
         if self._capabilities is None:
-            self._capabilities = self.provider.get_capabilities(self.model_name)
+            logger.debug(f"[MODEL_CONTEXT] Capabilities not cached, getting provider")
+            provider = self.provider
+            logger.debug(f"[MODEL_CONTEXT] Got provider: {provider}")
+            logger.debug(f"[MODEL_CONTEXT] Calling get_capabilities for {self.model_name}")
+            self._capabilities = provider.get_capabilities(self.model_name)
+            logger.debug(f"[MODEL_CONTEXT] Got capabilities from provider")
         return self._capabilities
 
     def calculate_token_allocation(self, reserved_for_response: Optional[int] = None) -> TokenAllocation:
@@ -112,7 +117,11 @@ class ModelContext:
         Returns:
             TokenAllocation with calculated budgets for dual prioritization strategy
         """
-        total_tokens = self.capabilities.context_window
+        logger.debug(f"[MODEL_CONTEXT] Getting capabilities for {self.model_name}")
+        capabilities = self.capabilities
+        logger.debug(f"[MODEL_CONTEXT] Got capabilities: {capabilities}")
+        total_tokens = capabilities.context_window
+        logger.debug(f"[MODEL_CONTEXT] Context window: {total_tokens}")
 
         # Dynamic allocation based on model capacity
         if total_tokens < 300_000:
@@ -145,11 +154,15 @@ class ModelContext:
         )
 
         logger.debug(f"Token allocation for {self.model_name}:")
-        logger.debug(f"  Total: {allocation.total_tokens:,}")
-        logger.debug(f"  Content: {allocation.content_tokens:,} ({content_ratio:.0%})")
-        logger.debug(f"  Response: {allocation.response_tokens:,} ({response_ratio:.0%})")
-        logger.debug(f"  Files: {allocation.file_tokens:,} ({file_ratio:.0%} of content)")
-        logger.debug(f"  History: {allocation.history_tokens:,} ({history_ratio:.0%} of content)")
+        try:
+            logger.debug(f"  Total: {allocation.total_tokens:,}")
+            logger.debug(f"  Content: {allocation.content_tokens:,} ({content_ratio:.0%})")
+            logger.debug(f"  Response: {allocation.response_tokens:,} ({response_ratio:.0%})")
+            logger.debug(f"  Files: {allocation.file_tokens:,} ({file_ratio:.0%} of content)")
+            logger.debug(f"  History: {allocation.history_tokens:,} ({history_ratio:.0%} of content)")
+        except Exception as e:
+            logger.error(f"Error formatting token allocation: {e}")
+            logger.error(f"allocation.total_tokens type: {type(allocation.total_tokens)}, value: {allocation.total_tokens}")
 
         return allocation
 

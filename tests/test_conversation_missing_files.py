@@ -7,6 +7,8 @@ handles missing files without crashing.
 
 from unittest.mock import Mock
 
+import pytest
+
 from utils.conversation_memory import (
     ConversationTurn,
     ThreadContext,
@@ -17,7 +19,8 @@ from utils.conversation_memory import (
 class TestConversationMissingFiles:
     """Test handling of missing files during conversation memory reconstruction."""
 
-    def test_build_conversation_history_handles_missing_files(self):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history_handles_missing_files(self):
         """Test that conversation history building handles missing files gracefully."""
 
         # Create conversation context with missing file reference (following existing test patterns)
@@ -51,7 +54,7 @@ class TestConversationMissingFiles:
         mock_model_context.model_name = "test-model"
 
         # Should not crash, should handle missing file gracefully
-        history, tokens = build_conversation_history(context, mock_model_context)
+        history, tokens = await build_conversation_history(context, mock_model_context)
 
         # Should return valid history despite missing file
         assert isinstance(history, str)

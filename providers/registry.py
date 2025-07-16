@@ -2,6 +2,7 @@
 
 import logging
 import os
+import threading
 from typing import TYPE_CHECKING, Optional
 
 from .base import ModelProvider, ProviderType
@@ -11,19 +12,33 @@ if TYPE_CHECKING:
 
 
 class ModelProviderRegistry:
-    """Registry for managing model providers."""
+    """Thread-safe registry for managing model providers.
+
+    This class implements a thread-safe singleton pattern to manage AI model
+    providers. It ensures safe concurrent access when multiple threads (e.g.,
+    from asyncio.to_thread() in the consensus tool) access the registry.
+
+    Thread Safety:
+        - Singleton initialization is protected by a class-level lock
+        - All provider access and mutations are protected by an instance-level lock
+        - Implements double-checked locking pattern for optimal performance
+    """
 
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls):
-        """Singleton pattern for registry."""
-        if cls._instance is None:
-            logging.debug("REGISTRY: Creating new registry instance")
-            cls._instance = super().__new__(cls)
-            # Initialize instance dictionaries on first creation
-            cls._instance._providers = {}
-            cls._instance._initialized_providers = {}
-            logging.debug(f"REGISTRY: Created instance {cls._instance}")
+        """Thread-safe singleton pattern for registry."""
+        with cls._lock:
+            if cls._instance is None:
+                logging.debug("REGISTRY: Creating new registry instance")
+                cls._instance = super().__new__(cls)
+                # Initialize instance dictionaries on first creation
+                cls._instance._providers = {}
+                cls._instance._initialized_providers = {}
+                # Add instance-level lock for provider initialization
+                cls._instance._provider_lock = threading.Lock()
+                logging.debug(f"REGISTRY: Created instance {cls._instance}")
         return cls._instance
 
     @classmethod
@@ -35,7 +50,8 @@ class ModelProviderRegistry:
             provider_class: Class that implements ModelProvider interface
         """
         instance = cls()
-        instance._providers[provider_type] = provider_class
+        with instance._provider_lock:
+            instance._providers[provider_type] = provider_class
 
     @classmethod
     def get_provider(cls, provider_type: ProviderType, force_new: bool = False) -> Optional[ModelProvider]:
@@ -50,46 +66,54 @@ class ModelProviderRegistry:
         """
         instance = cls()
 
-        # Return cached instance if available and not forcing new
-        if not force_new and provider_type in instance._initialized_providers:
-            return instance._initialized_providers[provider_type]
+        # Use instance-level lock for thread-safe provider access
+        with instance._provider_lock:
+            # Return cached instance if available and not forcing new
+            if not force_new and provider_type in instance._initialized_providers:
+                return instance._initialized_providers[provider_type]
 
-        # Check if provider class is registered
-        if provider_type not in instance._providers:
-            return None
+            # Check if provider class is registered
+            if provider_type not in instance._providers:
+                return None
 
-        # Get API key from environment
+        # Get API key from environment (outside lock to avoid blocking)
         api_key = cls._get_api_key_for_provider(provider_type)
 
-        # Get provider class or factory function
-        provider_class = instance._providers[provider_type]
+        # Re-acquire lock for provider instantiation to ensure thread safety
+        with instance._provider_lock:
+            # Double-check pattern: check again if provider was created by another thread
+            if not force_new and provider_type in instance._initialized_providers:
+                return instance._initialized_providers[provider_type]
 
-        # For custom providers, handle special initialization requirements
-        if provider_type == ProviderType.CUSTOM:
-            # Check if it's a factory function (callable but not a class)
-            if callable(provider_class) and not isinstance(provider_class, type):
-                # Factory function - call it with api_key parameter
-                provider = provider_class(api_key=api_key)
+            # Get provider class or factory function
+            provider_class = instance._providers[provider_type]
+
+            # For custom providers, handle special initialization requirements
+            if provider_type == ProviderType.CUSTOM:
+                # Check if it's a factory function (callable but not a class)
+                if callable(provider_class) and not isinstance(provider_class, type):
+                    # Factory function - call it with api_key parameter
+                    provider = provider_class(api_key=api_key)
+                else:
+                    # Regular class - need to handle URL requirement
+                    custom_url = os.getenv("CUSTOM_API_URL", "")
+                    if not custom_url:
+                        if api_key:  # Key is set but URL is missing
+                            logging.warning("CUSTOM_API_KEY set but CUSTOM_API_URL missing – skipping Custom provider")
+                        return None
+                    # Use empty string as API key for custom providers that don't need auth (e.g., Ollama)
+                    # This allows the provider to be created even without CUSTOM_API_KEY being set
+                    api_key = api_key or ""
+                    # Initialize custom provider with both API key and base URL
+                    provider = provider_class(api_key=api_key, base_url=custom_url)
             else:
-                # Regular class - need to handle URL requirement
-                custom_url = os.getenv("CUSTOM_API_URL", "")
-                if not custom_url:
-                    if api_key:  # Key is set but URL is missing
-                        logging.warning("CUSTOM_API_KEY set but CUSTOM_API_URL missing – skipping Custom provider")
+                if not api_key:
                     return None
-                # Use empty string as API key for custom providers that don't need auth (e.g., Ollama)
-                # This allows the provider to be created even without CUSTOM_API_KEY being set
-                api_key = api_key or ""
-                # Initialize custom provider with both API key and base URL
-                provider = provider_class(api_key=api_key, base_url=custom_url)
-        else:
-            if not api_key:
-                return None
-            # Initialize non-custom provider with just API key
-            provider = provider_class(api_key=api_key)
+                # Initialize non-custom provider with just API key
+                provider = provider_class(api_key=api_key)
 
-        # Cache the instance
-        instance._initialized_providers[provider_type] = provider
+            # Cache the instance
+            instance._initialized_providers[provider_type] = provider
 
         return provider
 
@@ -127,17 +151,20 @@ class ModelProviderRegistry:
         logging.debug(f"Available providers in registry: {list(instance._providers.keys())}")
 
         for provider_type in PROVIDER_PRIORITY_ORDER:
-            if provider_type in instance._providers:
-                logging.debug(f"Found {provider_type} in registry")
-                # Get or create provider instance
-                provider = cls.get_provider(provider_type)
-                if provider and provider.validate_model_name(model_name):
-                    logging.debug(f"{provider_type} validates model {model_name}")
-                    return provider
-                else:
-                    logging.debug(f"{provider_type} does not validate model {model_name}")
+            # Use lock to safely check provider existence
+            with instance._provider_lock:
+                if provider_type not in instance._providers:
+                    logging.debug(f"{provider_type} not found in registry")
+                    continue
+
+            logging.debug(f"Found {provider_type} in registry")
+            # Get or create provider instance (this method is already thread-safe)
+            provider = cls.get_provider(provider_type)
+            if provider and provider.validate_model_name(model_name):
+                logging.debug(f"{provider_type} validates model {model_name}")
+                return provider
             else:
-                logging.debug(f"{provider_type} not found in registry")
+                logging.debug(f"{provider_type} does not validate model {model_name}")
 
         logging.debug(f"No provider found for model {model_name}")
         return None
@@ -437,13 +464,24 @@ class ModelProviderRegistry:
 
     @classmethod
     def clear_cache(cls) -> None:
-        """Clear cached provider instances."""
+        """Clear cached provider instances.
+
+        Thread-safe method to clear all cached provider instances.
+        """
         instance = cls()
-        instance._initialized_providers.clear()
+        with instance._provider_lock:
+            instance._initialized_providers.clear()
 
     @classmethod
     def unregister_provider(cls, provider_type: ProviderType) -> None:
-        """Unregister a provider (mainly for testing)."""
+        """Unregister a provider (mainly for testing).
+
+        Thread-safe method to remove a provider from the registry.
+
+        Args:
+            provider_type: Type of provider to unregister
+        """
         instance = cls()
-        instance._providers.pop(provider_type, None)
-        instance._initialized_providers.pop(provider_type, None)
+        with instance._provider_lock:
+            instance._providers.pop(provider_type, None)
+            instance._initialized_providers.pop(provider_type, None)

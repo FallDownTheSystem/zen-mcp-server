@@ -944,19 +944,31 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
     model_from_args = arguments.get("model")
     if not model_from_args and context.turns:
         # Find the last assistant turn to get the model used
+        # Skip consensus tool turns as they use multiple models internally
         for turn in reversed(context.turns):
-            if turn.role == "assistant" and turn.model_name:
+            if turn.role == "assistant" and turn.model_name and turn.tool_name != "consensus":
                 arguments["model"] = turn.model_name
                 logger.debug(f"[CONVERSATION_DEBUG] Using model from previous turn: {turn.model_name}")
                 break
 
-    model_context = ModelContext.from_arguments(arguments)
+    # For consensus tool, don't create a model context if no model was found
+    # Consensus handles its own models internally
+    if context.tool_name == "consensus" and not arguments.get("model"):
+        # Use a fallback model just for token calculation in history building
+        # This won't affect the actual consensus execution
+        from providers.registry import ModelProviderRegistry
+
+        fallback_model = ModelProviderRegistry.get_preferred_fallback_model()
+        model_context = ModelContext(fallback_model)
+        logger.debug(f"[CONVERSATION_DEBUG] Using fallback model {fallback_model} for consensus history building")
+    else:
+        model_context = ModelContext.from_arguments(arguments)
 
     # Build conversation history with model-specific limits
     logger.debug(f"[CONVERSATION_DEBUG] Building conversation history for thread {continuation_id}")
     logger.debug(f"[CONVERSATION_DEBUG] Thread has {len(context.turns)} turns, tool: {context.tool_name}")
     logger.debug(f"[CONVERSATION_DEBUG] Using model: {model_context.model_name}")
-    conversation_history, conversation_tokens = build_conversation_history(context, model_context)
+    conversation_history, conversation_tokens = await build_conversation_history(context, model_context)
     logger.debug(f"[CONVERSATION_DEBUG] Conversation history built: {conversation_tokens:,} tokens")
     logger.debug(
         f"[CONVERSATION_DEBUG] Conversation history length: {len(conversation_history)} chars (~{conversation_tokens:,} tokens)"

@@ -186,7 +186,7 @@ class ChatTool(SimpleTool):
         user_content = self.handle_prompt_file_with_fallback(request)
 
         # Build user prompt with file context and web search instructions (no system prompt)
-        return self.build_user_prompt(user_content, request, "CONTEXT FILES")
+        return await self.build_user_prompt(user_content, request, "CONTEXT FILES")
 
     def format_response(self, response: str, request: ChatRequest, model_info: Optional[dict] = None) -> str:
         """

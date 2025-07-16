@@ -12,6 +12,8 @@ This module tests the enhanced conversation memory system including:
 import os
 from unittest.mock import patch
 
+import pytest
+
 from utils.conversation_memory import (
     ConversationTurn,
     ThreadContext,
@@ -98,7 +100,8 @@ class TestConversationFileList:
 class TestFileInclusionPlanning:
     """Test token-aware file inclusion planning for conversation history"""
 
-    def test_plan_file_inclusion_within_budget(self, project_path):
+    @pytest.mark.asyncio
+    async def test_plan_file_inclusion_within_budget(self, project_path):
         """Test file inclusion when all files fit within token budget"""
         # Create small test files
         small_file1 = os.path.join(project_path, "small1.py")
@@ -112,13 +115,14 @@ class TestFileInclusionPlanning:
         all_files = [small_file1, small_file2]
         max_tokens = 1000  # Generous budget
 
-        included, skipped, total_tokens = _plan_file_inclusion_by_size(all_files, max_tokens)
+        included, skipped, total_tokens = await _plan_file_inclusion_by_size(all_files, max_tokens)
 
         assert included == all_files
         assert skipped == []
         assert total_tokens > 0  # Should have estimated some tokens
 
-    def test_plan_file_inclusion_exceeds_budget(self, project_path):
+    @pytest.mark.asyncio
+    async def test_plan_file_inclusion_exceeds_budget(self, project_path):
         """Test file inclusion when files exceed token budget"""
         # Create files with different sizes
         small_file = os.path.join(project_path, "small.py")
@@ -132,25 +136,27 @@ class TestFileInclusionPlanning:
         all_files = [small_file, large_file]
         max_tokens = 50  # Very tight budget
 
-        included, skipped, total_tokens = _plan_file_inclusion_by_size(all_files, max_tokens)
+        included, skipped, total_tokens = await _plan_file_inclusion_by_size(all_files, max_tokens)
 
         # Should include some files, skip others when budget is tight
         assert len(included) + len(skipped) == 2
         assert total_tokens <= max_tokens
 
-    def test_plan_file_inclusion_empty_list(self):
+    @pytest.mark.asyncio
+    async def test_plan_file_inclusion_empty_list(self):
         """Test file inclusion planning with empty file list"""
-        included, skipped, total_tokens = _plan_file_inclusion_by_size([], 1000)
+        included, skipped, total_tokens = await _plan_file_inclusion_by_size([], 1000)
 
         assert included == []
         assert skipped == []
         assert total_tokens == 0
 
-    def test_plan_file_inclusion_nonexistent_files(self):
+    @pytest.mark.asyncio
+    async def test_plan_file_inclusion_nonexistent_files(self):
         """Test file inclusion planning with non-existent files"""
         nonexistent_files = ["/does/not/exist1.py", "/does/not/exist2.py"]
 
-        included, skipped, total_tokens = _plan_file_inclusion_by_size(nonexistent_files, 1000)
+        included, skipped, total_tokens = await _plan_file_inclusion_by_size(nonexistent_files, 1000)
 
         assert included == []
         assert skipped == nonexistent_files
@@ -161,7 +167,8 @@ class TestConversationHistoryBuilding:
     """Test conversation history building with file content embedding"""
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_build_conversation_history_with_file_content(self, project_path):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history_with_file_content(self, project_path):
         """Test that conversation history includes embedded file content"""
         from providers.registry import ModelProviderRegistry
 
@@ -192,7 +199,7 @@ class TestConversationHistoryBuilding:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # Verify structure
         assert "=== CONVERSATION HISTORY (CONTINUATION) ===" in history
@@ -210,7 +217,8 @@ class TestConversationHistoryBuilding:
         assert f"Files used in this turn: {test_file}" in history
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_build_conversation_history_file_deduplication(self, project_path):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history_file_deduplication(self, project_path):
         """Test that files are embedded only once even if referenced multiple times"""
         from providers.registry import ModelProviderRegistry
 
@@ -245,7 +253,7 @@ class TestConversationHistoryBuilding:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # File should appear in embedded section only once
         file_begin_count = history.count("--- BEGIN FILE:")
@@ -257,7 +265,8 @@ class TestConversationHistoryBuilding:
         turn_file_refs = history.count(f"Files used in this turn: {test_file}")
         assert turn_file_refs == 2, "Both turns should show file usage"
 
-    def test_build_conversation_history_empty_turns(self):
+    @pytest.mark.asyncio
+    async def test_build_conversation_history_empty_turns(self):
         """Test conversation history building with no turns"""
         context = ThreadContext(
             thread_id="empty-thread",
@@ -268,7 +277,7 @@ class TestConversationHistoryBuilding:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         assert history == ""
         assert tokens == 0
@@ -278,7 +287,8 @@ class TestCrossToolFileContext:
     """Test cross-tool file context preservation in conversations"""
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_cross_tool_file_context_preservation(self, project_path):
+    @pytest.mark.asyncio
+    async def test_cross_tool_file_context_preservation(self, project_path):
         """Test that file context is preserved across different tools"""
         from providers.registry import ModelProviderRegistry
 
@@ -325,7 +335,7 @@ class TestCrossToolFileContext:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # Verify cross-tool context
         assert "--- Turn 1 (Gemini using chat) ---" in history
@@ -349,7 +359,8 @@ class TestLargeConversations:
     """Test behavior with large conversations, many files, and many turns"""
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_large_conversation_with_many_files(self, project_path):
+    @pytest.mark.asyncio
+    async def test_large_conversation_with_many_files(self, project_path):
         """Test conversation with many files across multiple turns"""
         from providers.registry import ModelProviderRegistry
 
@@ -391,7 +402,7 @@ class TestLargeConversations:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # Verify structure
         assert "=== CONVERSATION HISTORY (CONTINUATION) ===" in history
@@ -414,7 +425,8 @@ class TestLargeConversations:
 class TestSmallAndNewConversations:
     """Test behavior with small/new conversations and edge cases"""
 
-    def test_empty_conversation(self):
+    @pytest.mark.asyncio
+    async def test_empty_conversation(self):
         """Test completely empty conversation"""
         context = ThreadContext(
             thread_id="empty",
@@ -425,13 +437,14 @@ class TestSmallAndNewConversations:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         assert history == ""
         assert tokens == 0
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_single_turn_conversation(self, project_path):
+    @pytest.mark.asyncio
+    async def test_single_turn_conversation(self, project_path):
         """Test conversation with just one turn"""
         from providers.registry import ModelProviderRegistry
 
@@ -459,7 +472,7 @@ class TestSmallAndNewConversations:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # Should work correctly for single turn
         assert "=== CONVERSATION HISTORY (CONTINUATION) ===" in history
@@ -500,7 +513,8 @@ class TestFailureScenarios:
         assert "/also/missing.py" in files
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "OPENAI_API_KEY": ""}, clear=False)
-    def test_conversation_with_unreadable_files(self, project_path):
+    @pytest.mark.asyncio
+    async def test_conversation_with_unreadable_files(self, project_path):
         """Test conversation history building with unreadable files"""
         from providers.registry import ModelProviderRegistry
 
@@ -532,7 +546,7 @@ class TestFailureScenarios:
             initial_context={},
         )
 
-        history, tokens = build_conversation_history(context)
+        history, tokens = await build_conversation_history(context)
 
         # Should handle gracefully - build history with accessible files
         assert "=== CONVERSATION HISTORY (CONTINUATION) ===" in history

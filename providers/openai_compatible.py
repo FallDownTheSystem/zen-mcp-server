@@ -4,6 +4,7 @@ import base64
 import ipaddress
 import logging
 import os
+import threading
 import time
 from abc import abstractmethod
 from typing import Optional
@@ -41,6 +42,7 @@ class OpenAICompatibleProvider(ModelProvider):
         """
         super().__init__(api_key, **kwargs)
         self._client = None
+        self._client_lock = threading.Lock()  # Thread-safe lazy initialization
         self.base_url = base_url
         self.organization = kwargs.get("organization")
         self.allowed_models = self._parse_allowed_models()
@@ -195,8 +197,14 @@ class OpenAICompatibleProvider(ModelProvider):
 
     @property
     def client(self):
-        """Lazy initialization of OpenAI client with security checks and timeout configuration."""
-        if self._client is None:
+        """Lazy and thread-safe initialization of OpenAI client with security checks and timeout configuration."""
+        if self._client is not None:
+            return self._client
+
+        with self._client_lock:
+            # Double-check in case another thread initialized it while we waited for the lock
+            if self._client is not None:
+                return self._client
             import os
 
             import httpx
@@ -220,9 +228,36 @@ class OpenAICompatibleProvider(ModelProvider):
 
                 # Create httpx client with minimal config to avoid proxy conflicts
                 # Note: proxies parameter was removed in httpx 0.28.0
+                #
+                # CRITICAL: Create a synchronous httpx client to prevent asyncio deadlocks
+                # When this provider is called from asyncio.to_thread() (e.g., in the consensus tool),
+                # httpx's default transport can auto-detect the main thread's event loop and try to use it.
+                # This creates a deadlock: the event loop waits for the thread, while the thread waits
+                # for the event loop. We need to ensure the client is purely synchronous.
+                # DO NOT REMOVE THIS without understanding the deadlock implications!
+                #
+                # NOTE: httpx.RequestsTransport was removed in newer versions of httpx.
+                # Instead, we configure the httpx client to be purely synchronous by:
+                # 1. Disabling keepalive connections to prevent connection accumulation
+                # 2. Setting Connection: close header to force connection closure
+                # 3. Disabling trust_env to avoid async proxy detection
+                
+                # Configure httpx client limits for connection management
+                limits = httpx.Limits(
+                    max_connections=100,      # Total connections across all hosts
+                    max_keepalive_connections=0,  # Disable keepalive to prevent accumulation
+                    keepalive_expiry=0.0     # Disable keepalive completely
+                )
+                
+                # Create a synchronous httpx client
+                # Setting trust_env=False ensures it doesn't try to detect proxy settings
+                # which could cause additional async operations
                 http_client = httpx.Client(
                     timeout=timeout_config,
+                    limits=limits,
                     follow_redirects=True,
+                    headers={"Connection": "close"},  # Force connection closure
+                    trust_env=False,  # Disable proxy detection to avoid async operations
                 )
 
                 # Keep client initialization minimal to avoid proxy parameter conflicts
@@ -247,16 +282,22 @@ class OpenAICompatibleProvider(ModelProvider):
                 self._client = OpenAI(**client_kwargs)
 
             except Exception as e:
-                # If all else fails, try absolute minimal client without custom httpx
-                logging.warning(f"Failed to create client with custom httpx, falling back to minimal config: {e}")
-                try:
-                    minimal_kwargs = {"api_key": self.api_key}
-                    if self.base_url:
-                        minimal_kwargs["base_url"] = self.base_url
-                    self._client = OpenAI(**minimal_kwargs)
-                except Exception as fallback_error:
-                    logging.error(f"Even minimal OpenAI client creation failed: {fallback_error}")
-                    raise
+                # CRITICAL: The custom httpx client is ESSENTIAL to prevent deadlocks
+                # when running in an asyncio event loop via to_thread. Falling back
+                # to the default client is known to cause hangs.
+                logging.error(
+                    "CRITICAL: Failed to create OpenAI client with custom httpx configuration. "
+                    "This will likely lead to deadlocks in consensus tool. "
+                    "Error: %s",
+                    e,
+                    exc_info=True  # Log the full traceback for debugging
+                )
+                # Re-raising the exception is safer than continuing with a known-bad configuration.
+                # The provider will fail to initialize, but this is better than a production deadlock.
+                raise RuntimeError(
+                    "Failed to initialize a deadlock-safe HTTP client for OpenAI provider. "
+                    "The custom httpx client configuration is required to prevent asyncio deadlocks."
+                ) from e
             finally:
                 # Restore original proxy environment variables
                 for var, value in original_env.items():
@@ -895,3 +936,17 @@ class OpenAICompatibleProvider(ModelProvider):
         except Exception as e:
             logging.error(f"Error processing image {image_path}: {e}")
             return None
+
+    def close(self) -> None:
+        """Close the HTTP client and release resources."""
+        if self._client is not None:
+            try:
+                # Get the http_client from the OpenAI client
+                if hasattr(self._client, "_client") and hasattr(self._client._client, "close"):
+                    self._client._client.close()
+                elif hasattr(self._client, "close"):
+                    self._client.close()
+            except Exception as e:
+                logging.debug(f"Error closing OpenAI client: {e}")
+            finally:
+                self._client = None

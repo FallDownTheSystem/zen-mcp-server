@@ -104,6 +104,7 @@ This enables true AI-to-AI collaboration across the entire tool ecosystem with o
 context preservation and natural conversation understanding.
 """
 
+import asyncio
 import logging
 import os
 import uuid
@@ -570,7 +571,7 @@ def get_conversation_image_list(context: ThreadContext) -> list[str]:
     return image_list
 
 
-def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> tuple[list[str], list[str], int]:
+async def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> tuple[list[str], list[str], int]:
     """
     Plan which files to include based on size constraints.
 
@@ -596,9 +597,13 @@ def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> 
         try:
             from utils.file_utils import estimate_file_tokens
 
-            if os.path.exists(file_path) and os.path.isfile(file_path):
+            # Use asyncio.to_thread to avoid blocking the event loop
+            exists = await asyncio.to_thread(os.path.exists, file_path)
+            is_file = await asyncio.to_thread(os.path.isfile, file_path) if exists else False
+
+            if exists and is_file:
                 # Use centralized token estimation for consistency
-                estimated_tokens = estimate_file_tokens(file_path)
+                estimated_tokens = await asyncio.to_thread(estimate_file_tokens, file_path)
 
                 if total_tokens + estimated_tokens <= max_file_tokens:
                     files_to_include.append(file_path)
@@ -631,7 +636,9 @@ def _plan_file_inclusion_by_size(all_files: list[str], max_file_tokens: int) -> 
     return files_to_include, files_to_skip, total_tokens
 
 
-def build_conversation_history(context: ThreadContext, model_context=None, read_files_func=None) -> tuple[str, int]:
+async def build_conversation_history(
+    context: ThreadContext, model_context=None, read_files_func=None
+) -> tuple[str, int]:
     """
     Build formatted conversation history for tool prompts with embedded file contents.
 
@@ -729,9 +736,12 @@ def build_conversation_history(context: ThreadContext, model_context=None, read_
         - Graceful degradation when files are inaccessible or too large
     """
     # Get the complete thread chain
+    logger.debug(f"[HISTORY] Checking for parent thread: {context.parent_thread_id}")
     if context.parent_thread_id:
+        logger.debug(f"[HISTORY] Thread has parent, calling get_thread_chain")
         # This thread has a parent, get the full chain
         chain = get_thread_chain(context.thread_id)
+        logger.debug(f"[HISTORY] get_thread_chain returned {len(chain)} threads")
 
         # Collect all turns from all threads in chain
         all_turns = []
@@ -789,6 +799,7 @@ def build_conversation_history(context: ThreadContext, model_context=None, read_
     logger.debug(f"[HISTORY] Using model-specific limits for {model_context.model_name}:")
     logger.debug(f"[HISTORY]   Max file tokens: {max_file_tokens:,}")
     logger.debug(f"[HISTORY]   Max history tokens: {max_history_tokens:,}")
+    logger.debug(f"[HISTORY] About to build history parts")
 
     history_parts = [
         "=== CONVERSATION HISTORY (CONTINUATION) ===",
@@ -807,7 +818,9 @@ def build_conversation_history(context: ThreadContext, model_context=None, read_
         # CRITICAL: all_files is already ordered by newest-first prioritization from get_conversation_file_list()
         # So when _plan_file_inclusion_by_size() hits token limits, it naturally excludes OLDER files first
         # while preserving the most recent file references - exactly what we want!
-        files_to_include, files_to_skip, estimated_tokens = _plan_file_inclusion_by_size(all_files, max_file_tokens)
+        files_to_include, files_to_skip, estimated_tokens = await _plan_file_inclusion_by_size(
+            all_files, max_file_tokens
+        )
 
         if files_to_skip:
             logger.info(f"[FILES] Excluding {len(files_to_skip)} files from conversation history: {files_to_skip}")
@@ -839,7 +852,7 @@ def build_conversation_history(context: ThreadContext, model_context=None, read_
                 for file_path in files_to_include:
                     try:
                         logger.debug(f"[FILES] Processing file {file_path}")
-                        formatted_content, content_tokens = read_file_content(file_path)
+                        formatted_content, content_tokens = await asyncio.to_thread(read_file_content, file_path)
                         if formatted_content:
                             file_contents.append(formatted_content)
                             total_tokens += content_tokens
