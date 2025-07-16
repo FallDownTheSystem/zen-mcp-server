@@ -28,6 +28,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
+import litellm
+
 # Try to load environment variables from .env file if dotenv is available
 # This is optional - environment variables can still be passed directly
 try:
@@ -1202,6 +1205,16 @@ async def main():
     """
     logger.info("[MCP_DEBUG] Starting main() function")
 
+    # === CRITICAL FIX: Create a single HTTP client for LiteLLM ===
+    # This prevents resource exhaustion on Windows by reusing connections
+    async_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(600.0),  # 10 minute timeout to match LiteLLM default
+        limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
+    )
+    litellm.client_session = async_client
+    logger.info("Initialized shared HTTP client for LiteLLM")
+    # ============================================================
+
     # Validate and configure providers based on available API keys
     logger.info("[MCP_DEBUG] Configuring providers")
     configure_providers()
@@ -1230,21 +1243,27 @@ async def main():
 
     # Run the server using stdio transport (standard input/output)
     # This allows the server to be launched by MCP clients as a subprocess
-    logger.info("[MCP_DEBUG] Starting stdio server")
-    async with stdio_server() as (read_stream, write_stream):
-        logger.info("[MCP_DEBUG] stdio server started, running MCP server")
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="zen",
-                server_version=__version__,
-                capabilities=ServerCapabilities(
-                    tools=ToolsCapability(),  # Advertise tool support capability
-                    prompts=PromptsCapability(),  # Advertise prompt support capability
+    try:
+        logger.info("[MCP_DEBUG] Starting stdio server")
+        async with stdio_server() as (read_stream, write_stream):
+            logger.info("[MCP_DEBUG] stdio server started, running MCP server")
+            await server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="zen",
+                    server_version=__version__,
+                    capabilities=ServerCapabilities(
+                        tools=ToolsCapability(),  # Advertise tool support capability
+                        prompts=PromptsCapability(),  # Advertise prompt support capability
+                    ),
                 ),
-            ),
-        )
+            )
+    finally:
+        # Ensure the HTTP client is properly closed
+        if 'async_client' in locals() and not async_client.is_closed:
+            await async_client.aclose()
+            logger.info("HTTP client closed successfully")
 
 
 def run():
