@@ -108,7 +108,8 @@ class TestIntelligentFallback:
             assert ProviderType.GOOGLE in available
             assert ProviderType.OPENAI not in available
 
-    def test_auto_mode_conversation_memory_integration(self):
+    @pytest.mark.asyncio
+    async def test_auto_mode_conversation_memory_integration(self):
         """Test that conversation memory uses intelligent fallback in auto mode"""
         from utils.conversation_memory import ThreadContext, build_conversation_history
 
@@ -145,12 +146,13 @@ class TestIntelligentFallback:
                 # Mock estimate_tokens to return integers for proper summing
                 mock_context_instance.estimate_tokens.return_value = 100
 
-                history, tokens = build_conversation_history(context, model_context=None)
+                history, tokens = await build_conversation_history(context, model_context=None)
 
                 # Verify that ModelContext was called with o4-mini (the intelligent fallback)
                 mock_context_class.assert_called_once_with("o4-mini")
 
-    def test_auto_mode_with_gemini_only(self):
+    @pytest.mark.asyncio
+    async def test_auto_mode_with_gemini_only(self):
         """Test auto mode behavior when only Gemini API key is available"""
         from utils.conversation_memory import ThreadContext, build_conversation_history
 
@@ -184,12 +186,13 @@ class TestIntelligentFallback:
                 # Mock estimate_tokens to return integers for proper summing
                 mock_context_instance.estimate_tokens.return_value = 100
 
-                history, tokens = build_conversation_history(context, model_context=None)
+                history, tokens = await build_conversation_history(context, model_context=None)
 
                 # Should use gemini-2.5-flash when only Gemini is available
                 mock_context_class.assert_called_once_with("gemini-2.5-flash")
 
-    def test_non_auto_mode_unchanged(self):
+    @pytest.mark.asyncio
+    async def test_non_auto_mode_unchanged(self):
         """Test that non-auto mode behavior is unchanged"""
         from utils.conversation_memory import ThreadContext, build_conversation_history
 
@@ -216,7 +219,7 @@ class TestIntelligentFallback:
                 # Mock estimate_tokens to return integers for proper summing
                 mock_context_instance.estimate_tokens.return_value = 100
 
-                history, tokens = build_conversation_history(context, model_context=None)
+                history, tokens = await build_conversation_history(context, model_context=None)
 
                 # Should use the configured DEFAULT_MODEL, not the intelligent fallback
                 mock_context_class.assert_called_once_with("gemini-2.5-pro")

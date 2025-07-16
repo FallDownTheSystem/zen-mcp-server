@@ -1,5 +1,151 @@
 # Changelog
 
+## [6.6.8] - 2025-01-16
+
+### Fixed
+- **Thread Pool Exhaustion Fix**: Removed `asyncio.to_thread` calls from consensus tool
+  - The mysterious limit of exactly 12 was caused by thread pool exhaustion
+  - Each consensus call was using 4-5 threads for conversation management operations
+  - With a possible default thread pool size of 12 (on 8-core systems), this explained the pattern:
+    - 5 calls × ~2.4 threads average = 12 threads (deadlock on 6th)
+    - 3 calls × 4 threads = 12 threads (deadlock on 4th)
+  - Removed `asyncio.to_thread` calls for `get_thread()`, `add_turn()`, `create_thread()`, and `_format_consensus_for_storage()`
+  - These operations are fast enough to run directly without threading
+  - This eliminates the thread pool exhaustion issue entirely
+
+### Changed
+- **Enhanced Logging**: Added detailed thread pool state logging
+  - Logs executor max_workers and active thread count on each consensus call
+  - Added logging to HybridLock to track async lock creation
+  - Helps diagnose thread pool issues in production
+
+## [6.6.7] - 2025-01-17
+
+### Added
+- **HybridLock Implementation**: Added a dual-mode lock class for future async compatibility
+  - Automatically uses asyncio.Lock() in async contexts and threading.Lock() in sync contexts
+  - Prevents event loop blocking when registry is accessed from async code
+  - Foundation for future registry improvements
+
+### Changed
+- **Registry Documentation**: Added warning about threading locks in async contexts
+  - Documents that get_provider_for_model() uses threading locks
+  - Recommends caching providers when making concurrent calls
+  - Complements the consensus tool fix by explaining the underlying issue
+
+## [6.6.6] - 2025-01-17
+
+### Fixed
+- **Consensus Tool Provider Reuse**: Fixed deadlock caused by redundant provider lookups
+  - The refinement phase was calling `get_model_provider()` again, causing lock contention
+  - Now reuses providers from the initial phase stored in a provider_map
+  - This eliminates the deterministic deadlock pattern (5 calls with 2 models, 3 calls with 4 models)
+  - The issue was that each `get_model_provider()` call acquires a threading.Lock in the registry
+  - With multiple models running concurrently, this created a race condition leading to deadlock
+
+## [6.6.5] - 2025-01-17
+
+### Fixed
+- **Thread Pool Exhaustion**: Fixed consensus tool deadlock after 5 calls
+  - Increased default thread pool executor from ~32 to 100 workers
+  - Each consensus call uses multiple threads for storage operations (get_thread, add_turn, create_thread)
+  - With the default pool size, 5 consensus calls would exhaust available threads
+  - Added automatic thread pool configuration when event loop is running
+  - Custom thread name prefix "zen-consensus" for easier debugging
+
+### Changed
+- **Consensus Tool Simplification**: Refactored to use simpler async patterns
+  - Replaced `asyncio.create_task()` + `asyncio.wait()` with `asyncio.gather()`
+  - Added timeout wrapper methods for cleaner timeout handling
+  - Removed unnecessary JSON serialization threading (fast enough for main thread)
+  - Kept threading only for actual blocking I/O operations
+
+## [6.6.4] - 2025-01-17
+
+### Fixed
+- **OpenAI Async Implementation**: Fixed AttributeError in OpenAI async implementation
+  - Removed call to non-existent `_supports_temperature()` method
+  - Now uses `_get_effective_temperature()` to determine temperature support
+  - Added proper handling for o3-pro and o3-deep-research models to use responses endpoint
+  - Matches the sync implementation's logic for parameter handling
+
+## [6.6.3] - 2025-01-17
+
+### Fixed
+- **Gemini Async Content Format**: Fixed validation error in Gemini async implementation
+  - Text content must be wrapped in {"text": content} dictionary, not passed as raw string
+  - This matches the sync implementation's format requirements
+  - Fixes "Input should be a valid dictionary" validation errors
+
+## [6.6.2] - 2025-01-17
+
+### Fixed
+- **Critical Async Fix**: Fixed blocking I/O in Gemini async implementation
+  - Image processing now uses `asyncio.to_thread()` to avoid blocking the event loop
+  - Moved asyncio import to top of file for better performance
+  - This prevents potential deadlocks when processing images with Gemini models
+
+## [6.6.1] - 2025-07-16
+
+### Added
+- **Gemini Async Support**: Added native async support to Gemini provider
+  - Implemented `agenerate_content()` method using `client.aio.models.generate_content`
+  - Uses same retry logic as sync version but with async sleep
+  - Completes the async migration for all major providers
+
+### Removed
+- **DIAL Provider**: Removed DIAL provider and all references
+  - Deleted `providers/dial.py` and test files
+  - Removed DIAL_API_KEY from all configuration files
+  - Updated documentation and scripts to remove DIAL references
+  - Cleaned up provider registry and model restrictions
+
+### Changed
+- **Simplified Provider List**: Streamlined to core providers only
+  - Google Gemini (native)
+  - OpenAI (native) 
+  - X.AI GROK (native)
+  - Custom endpoints (local/private)
+  - OpenRouter (catch-all)
+
+## [6.6.0] - 2025-07-16
+
+### Added
+- **Native Async Support**: Added `agenerate_content()` method to all providers
+  - Base provider class now includes async method that wraps sync by default
+  - OpenAI provider implements native async using AsyncOpenAI client
+  - Eliminates all threading and deadlock issues by working WITH httpx's async nature
+  - Consensus tool now uses async methods directly with asyncio.gather()
+
+### Changed
+- **Consensus Tool Refactored**: Removed all threading complexity
+  - No more thread pools, semaphores, or asyncio.to_thread()
+  - Uses native async provider methods for true parallel execution
+  - Much simpler and more reliable implementation
+  - Should completely eliminate the deadlock issues
+
+### Removed
+- **Threading Infrastructure**: Removed from consensus tool
+  - Removed custom thread pool executor
+  - Removed thread semaphore
+  - Removed complex thread isolation attempts
+  - All replaced with clean async/await patterns
+
+## [6.5.13] - 2025-07-16
+
+### Changed
+- **Connection Pool Strategy**: Disabled connection pooling entirely as a temporary fix
+  - Set max_connections=1 to prevent pool exhaustion
+  - The consistent deadlock pattern (5th call with 2 models, 3rd with 4) suggests pool exhaustion
+  - This is less efficient but should prevent the deadlock
+  - Added more detailed logging to track client initialization
+
+### Fixed
+- **HTTP Client Configuration**: Simplified httpx client setup
+  - Removed complex transport configuration that wasn't working
+  - Using basic httpx.Client with minimal pooling
+  - Added http1=True, http2=False to force HTTP/1.1
+
 ## [6.5.12] - 2025-07-16
 
 ### Fixed

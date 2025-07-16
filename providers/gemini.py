@@ -1,5 +1,6 @@
 """Gemini model provider implementation."""
 
+import asyncio
 import base64
 import logging
 import os
@@ -211,6 +212,13 @@ class GeminiModelProvider(ModelProvider):
                 actual_thinking_budget = int(max_thinking_tokens * self.THINKING_BUDGETS[reasoning_effort])
                 generation_config.thinking_config = types.ThinkingConfig(thinking_budget=actual_thinking_budget)
 
+        # DEADLOCK_DEBUG: Log the actual content size
+        import json
+        content_json = json.dumps(contents)
+        content_size = len(content_json)
+        logging.warning(f"[DEADLOCK_DEBUG] Gemini API request size: {content_size:,} chars (~{content_size//4:,} tokens)")
+        logging.warning(f"[DEADLOCK_DEBUG] Prompt length: {len(prompt):,} chars, parts count: {len(parts)}")
+        
         # Retry logic with progressive delays
         max_retries = 4  # Total of 4 attempts
         retry_delays = [1, 3, 5, 8]  # Progressive delays: 1s, 3s, 5s, 8s
@@ -480,3 +488,130 @@ class GeminiModelProvider(ModelProvider):
         except Exception as e:
             logger.error(f"Error processing image {image_path}: {e}")
             return None
+
+    async def agenerate_content(
+        self,
+        prompt: str,
+        model_name: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        reasoning_effort: str = "medium",
+        images: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        """Async version of generate_content using client.aio interface."""
+        # Validate parameters
+        resolved_name = self._resolve_model_name(model_name)
+        self.validate_parameters(model_name, temperature)
+        
+        # Prepare content parts (text and potentially images)
+        parts = []
+        
+        # Add system and user prompts as text
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
+        else:
+            full_prompt = prompt
+        
+        parts.append({"text": full_prompt})
+
+        # Add images if provided and model supports them
+        if images and self._supports_vision(resolved_name):
+            for image_path in images:
+                try:
+                    image_part = await asyncio.to_thread(self._process_image, image_path)
+                    if image_part:
+                        parts.append(image_part)
+                except Exception as e:
+                    logger.warning(f"Failed to process image {image_path}: {e}")
+                    # Continue with other images and text
+                    continue
+        elif images and not self._supports_vision(resolved_name):
+            logger.warning(f"Model {resolved_name} does not support images, ignoring {len(images)} image(s)")
+
+        # Create contents structure
+        contents = [{"parts": parts}]
+
+        # Prepare generation config
+        generation_config = types.GenerateContentConfig(
+            temperature=temperature,
+            candidate_count=1,
+        )
+
+        # Add max output tokens if specified
+        if max_output_tokens:
+            generation_config.max_output_tokens = max_output_tokens
+
+        # Add thinking configuration for models that support it
+        capabilities = self.get_capabilities(model_name)
+        if capabilities.supports_extended_thinking and reasoning_effort in self.THINKING_BUDGETS:
+            # Get model's max thinking tokens and calculate actual budget
+            model_config = self.SUPPORTED_MODELS.get(resolved_name)
+            if model_config and model_config.max_thinking_tokens > 0:
+                max_thinking_tokens = model_config.max_thinking_tokens
+                actual_thinking_budget = int(max_thinking_tokens * self.THINKING_BUDGETS[reasoning_effort])
+                generation_config.thinking_config = types.ThinkingConfig(thinking_budget=actual_thinking_budget)
+
+        # Retry logic with progressive delays
+        max_retries = 4  # Total of 4 attempts
+        retry_delays = [1, 3, 5, 8]  # Progressive delays: 1s, 3s, 5s, 8s
+
+        last_exception = None
+
+        for attempt in range(max_retries):
+            try:
+                # Generate content using async client
+                response = await self.client.aio.models.generate_content(
+                    model=resolved_name,
+                    contents=contents,
+                    config=generation_config,
+                )
+
+                # Extract usage information if available
+                usage = self._extract_usage(response)
+
+                return ModelResponse(
+                    content=response.text,
+                    usage=usage,
+                    model_name=resolved_name,
+                    friendly_name="Gemini",
+                    provider=ProviderType.GOOGLE,
+                    metadata={
+                        "reasoning_effort": reasoning_effort if capabilities.supports_extended_thinking else None,
+                        "finish_reason": (
+                            getattr(response.candidates[0], "finish_reason", "STOP") if response.candidates else "STOP"
+                        ),
+                    },
+                )
+
+            except Exception as e:
+                last_exception = e
+
+                # Check if this is a retryable error using structured error codes
+                is_retryable = self._is_error_retryable(e)
+
+                # If this is the last attempt or not retryable, give up
+                if attempt == max_retries - 1 or not is_retryable:
+                    break
+
+                # Get progressive delay
+                delay = retry_delays[attempt]
+
+                # Log retry attempt
+                logger.warning(
+                    f"Gemini API error for model {resolved_name}, attempt {attempt + 1}/{max_retries}: {str(e)}. Retrying in {delay}s..."
+                )
+                # Use async sleep
+                await asyncio.sleep(delay)
+
+        # If we get here, all retries failed
+        actual_attempts = attempt + 1  # Convert from 0-based index to human-readable count
+        error_msg = f"Gemini API error for model {resolved_name} after {actual_attempts} attempt{'s' if actual_attempts > 1 else ''}: {str(last_exception)}"
+        raise RuntimeError(error_msg) from last_exception
+
+    async def aclose(self):
+        """Close any async resources. Gemini client doesn't require explicit closing."""
+        # The Gemini SDK doesn't expose an explicit close method for async resources
+        # The underlying connections are managed automatically
+        pass

@@ -325,7 +325,6 @@ class BaseTool(ABC):
                 ProviderType.GOOGLE: "Gemini models",
                 ProviderType.OPENAI: "OpenAI models",
                 ProviderType.XAI: "X.AI GROK models",
-                ProviderType.DIAL: "DIAL models",
                 ProviderType.CUSTOM: "Custom models",
                 ProviderType.OPENROUTER: "OpenRouter models",
             }
@@ -333,7 +332,7 @@ class BaseTool(ABC):
             # Check available providers and add their model descriptions
 
             # Start with native providers
-            for provider_type in [ProviderType.GOOGLE, ProviderType.OPENAI, ProviderType.XAI, ProviderType.DIAL]:
+            for provider_type in [ProviderType.GOOGLE, ProviderType.OPENAI, ProviderType.XAI]:
                 # Only if this is registered / available
                 provider = ModelProviderRegistry.get_provider(provider_type)
                 if provider:

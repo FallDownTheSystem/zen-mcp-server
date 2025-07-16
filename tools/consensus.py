@@ -16,22 +16,40 @@ Key features:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 
+logger = logging.getLogger(__name__)
+
 # Global lock for thread extraction to prevent race conditions
 _extraction_lock = asyncio.Lock()
-# Semaphore to limit concurrent asyncio.to_thread operations
-# Set to 5 to handle up to 5 models in parallel (common use case)
-# This prevents thread exhaustion while allowing sufficient parallelism
-_thread_semaphore = asyncio.Semaphore(5)
 
-# Custom thread pool executor to avoid default pool exhaustion
-import concurrent.futures
-_thread_pool = concurrent.futures.ThreadPoolExecutor(
-    max_workers=10,
-    thread_name_prefix="consensus-worker"
-)
+# Increase the default thread pool size to prevent exhaustion
+# The default is min(32, (os.cpu_count() or 1) + 4) which might be too small
+# With multiple consensus calls, each using multiple threads, we can exhaust the pool
+def _ensure_thread_pool():
+    """Ensure the event loop has a thread pool with enough workers."""
+    try:
+        loop = asyncio.get_running_loop()
+        # Set a larger thread pool executor if not already set
+        if not hasattr(loop, '_zen_executor_set'):
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=100, thread_name_prefix="zen-consensus")
+            loop.set_default_executor(executor)
+            loop._zen_executor_set = True
+            loop._zen_resource_count = 0  # Track resource usage
+            logger.info(f"[CONSENSUS] Set default executor with 100 workers. Executor: {executor}, max_workers: {executor._max_workers}")
+        else:
+            # Log current executor state
+            default_executor = getattr(loop, '_default_executor', None)
+            if default_executor and hasattr(default_executor, '_max_workers'):
+                logger.info(f"[CONSENSUS] Executor already set with {default_executor._max_workers} workers")
+    except RuntimeError:
+        # No running loop yet, this is fine
+        pass
+
+# Call this when the module is imported
+_ensure_thread_pool()
 
 import os
 import time
@@ -48,8 +66,6 @@ from systemprompts import CONSENSUS_PROMPT
 from tools.shared.base_models import ToolRequest
 
 from .simple.base import SimpleTool
-
-logger = logging.getLogger(__name__)
 
 # Tool-specific field descriptions for consensus
 CONSENSUS_FIELD_DESCRIPTIONS = {
@@ -314,6 +330,24 @@ class ConsensusTool(SimpleTool):
         """Execute parallel consensus with optional cross-model feedback."""
         logger.debug(f"[CONSENSUS] Execute called with continuation_id: {arguments.get('continuation_id', 'None')}")
         
+        # Ensure we have a large enough thread pool
+        _ensure_thread_pool()
+        
+        # Log current thread pool state
+        try:
+            loop = asyncio.get_running_loop()
+            executor = getattr(loop, '_default_executor', None)
+            if executor:
+                max_workers = getattr(executor, '_max_workers', 'Unknown')
+                logger.info(f"[CONSENSUS] Current executor max_workers: {max_workers}")
+                # Count active threads
+                if hasattr(executor, '_threads'):
+                    logger.info(f"[CONSENSUS] Active executor threads: {len(executor._threads)}")
+            else:
+                logger.warning("[CONSENSUS] No default executor found!")
+        except Exception as e:
+            logger.error(f"[CONSENSUS] Error checking executor: {e}")
+        
         # Clear timeout cache for fresh execution
         self._timeout_cache.clear()
         logger.debug("[CONSENSUS] Cleared timeout cache for new execution")
@@ -342,61 +376,66 @@ class ConsensusTool(SimpleTool):
             system_prompt = self.get_system_prompt()
             logger.debug(f"[CONSENSUS] System prompt length: {len(system_prompt)} chars")
             
+            # Create a provider map to reuse in refinement phase
+            provider_map = {}
             model_resources = []
+            
+            # Track resource count
+            try:
+                loop = asyncio.get_running_loop()
+                if hasattr(loop, '_zen_resource_count'):
+                    logger.info(f"[CONSENSUS] Resource count before provider creation: {loop._zen_resource_count}")
+            except:
+                pass
+                
             for model_config in self.models_to_consult:
                 model_name = model_config.get("model")
+                logger.info(f"[CONSENSUS] Getting provider for {model_name}")
                 provider = self.get_model_provider(model_name)
+                provider_map[model_name] = provider  # Store for reuse
                 model_context = ModelContext(model_name)
                 model_resources.append((model_config, provider, model_context))
                 logger.debug(f"[CONSENSUS] Pre-created resources for {model_name}")
+                
+                # Increment resource count
+                try:
+                    loop = asyncio.get_running_loop()
+                    if hasattr(loop, '_zen_resource_count'):
+                        loop._zen_resource_count += 1
+                        logger.info(f"[CONSENSUS] Resource count after {model_name}: {loop._zen_resource_count}")
+                except:
+                    pass
             
-            # Create tasks as coroutines for better control
-            initial_tasks = [
-                asyncio.create_task(self._consult_model(
-                    model_config, request, phase="initial", provider=provider, 
-                    model_context=model_context, system_prompt=system_prompt
-                ))
-                for model_config, provider, model_context in model_resources
-            ]
-
             # Calculate phase timeout based on model requirements
             phase_timeout = self._get_phase_timeout(self.models_to_consult)
             logger.info(f"Phase 1 timeout set to {phase_timeout}s")
 
-            # Execute all initial consultations in parallel with phase timeout
-            # Using asyncio.wait() to preserve partial results on timeout
-            done, pending = await asyncio.wait(initial_tasks, timeout=phase_timeout)
-
-            # Cancel any pending tasks
-            for task in pending:
-                task.cancel()
+            # Execute all initial consultations in parallel with return_exceptions=True
+            # This ensures partial failures don't stop other models
+            ordered_responses = await asyncio.gather(
+                *[
+                    self._consult_model_with_timeout(
+                        model_config, request, phase="initial", provider=provider,
+                        model_context=model_context, system_prompt=system_prompt,
+                        phase_timeout=phase_timeout
+                    )
+                    for model_config, provider, model_context in model_resources
+                ],
+                return_exceptions=True
+            )
 
             # Process results and handle any errors
             successful_initial = []
             failed_models = []
 
-            # Build ordered responses list to maintain original model order
-            ordered_responses = []
-            for i, task in enumerate(initial_tasks):
-                if task in done:
-                    try:
-                        result = task.result()
-                        ordered_responses.append(result)
-                    except Exception as e:
-                        ordered_responses.append(e)
-                else:  # task in pending (timed out)
-                    model_name = self.models_to_consult[i].get("model", "unknown")
-                    timeout_error = TimeoutError(f"Phase timeout exceeded ({phase_timeout}s) for model {model_name}")
-                    ordered_responses.append(timeout_error)
-
-            # Now process ordered responses as before
+            # Process ordered responses
             for i, response in enumerate(ordered_responses):
                 if isinstance(response, Exception):
                     model_name = self.models_to_consult[i].get("model", "unknown")
                     error_msg = str(response)
 
-                    if isinstance(response, TimeoutError):
-                        logger.warning(f"Model {model_name} failed: {error_msg}")
+                    if isinstance(response, asyncio.TimeoutError):
+                        logger.warning(f"Model {model_name} failed: Phase timeout exceeded ({phase_timeout}s)")
                     else:
                         logger.error(f"Model {model_name} failed: {error_msg}")
 
@@ -415,6 +454,20 @@ class ConsensusTool(SimpleTool):
             if request.enable_cross_feedback and len(successful_initial) > 1:
                 logger.info(f"Starting cross-model feedback phase for {len(successful_initial)} models")
 
+                # Calculate timeout for refinement phase
+                # Use the same models that succeeded in initial phase
+                refinement_model_configs = [
+                    mc
+                    for mc in self.models_to_consult
+                    if any(
+                        r.get("model") == mc.get("model")
+                        for r in successful_initial
+                        if r.get("status") == "success"
+                    )
+                ]
+                refinement_timeout = self._get_phase_timeout(refinement_model_configs)
+                logger.info(f"Phase 2 (refinement) timeout set to {refinement_timeout}s")
+
                 refinement_tasks = []
                 for i, response in enumerate(successful_initial):
                     if response.get("status") == "success":
@@ -432,51 +485,36 @@ class ConsensusTool(SimpleTool):
 
                         if model_config and other_responses:
                             logger.debug(f"[CONSENSUS] Creating refinement task for {model_config.get('model')}")
-                            # Get provider before creating async task to avoid concurrent registry access
-                            provider = self.get_model_provider(model_config.get("model"))
+                            # Reuse provider from initial phase to avoid registry lock contention
+                            model_name = model_config.get("model")
+                            provider = provider_map.get(model_name)
+                            if not provider:
+                                logger.error(f"[CONSENSUS] Provider not found in map for {model_name}")
+                                continue
                             refinement_tasks.append(
-                                self._consult_model_with_feedback(
+                                self._consult_model_with_feedback_with_timeout(
                                     model_config, request, response, other_responses, 
-                                    phase="refinement", provider=provider, system_prompt=system_prompt
+                                    phase="refinement", provider=provider, system_prompt=system_prompt,
+                                    phase_timeout=refinement_timeout
                                 )
                             )
                             logger.debug(f"[CONSENSUS] Refinement task created for {model_config.get('model')}")
 
-                # Execute refinement tasks in parallel with phase timeout
+                # Execute refinement tasks in parallel
                 if refinement_tasks:
-                    # Create tasks for better control
-                    refinement_coroutines = [asyncio.create_task(task) for task in refinement_tasks]
-
-                    # Calculate timeout for refinement phase
-                    # Use the same models that succeeded in initial phase
-                    refinement_model_configs = [
-                        mc
-                        for mc in self.models_to_consult
-                        if any(
-                            r.get("model") == mc.get("model")
-                            for r in successful_initial
-                            if r.get("status") == "success"
-                        )
-                    ]
-                    refinement_timeout = self._get_phase_timeout(refinement_model_configs)
-                    logger.info(f"Phase 2 (refinement) timeout set to {refinement_timeout}s")
-
-                    # Wait with timeout
-                    done, pending = await asyncio.wait(refinement_coroutines, timeout=refinement_timeout)
-
-                    # Cancel any pending tasks
-                    for task in pending:
-                        task.cancel()
-                        logger.warning("Refinement task timed out at phase level")
-
-                    # Process completed refinement tasks
-                    for task in done:
-                        try:
-                            result = task.result()
-                            refined_responses.append(result)
-                        except Exception as e:
-                            logger.error(f"Refinement phase error: {e}")
+                    # Execute all refinement tasks in parallel with return_exceptions=True
+                    refinement_results = await asyncio.gather(*refinement_tasks, return_exceptions=True)
+                    
+                    # Process refinement results
+                    for i, result in enumerate(refinement_results):
+                        if isinstance(result, Exception):
+                            if isinstance(result, asyncio.TimeoutError):
+                                logger.warning(f"Refinement task timed out: {result}")
+                            else:
+                                logger.error(f"Refinement phase error: {result}")
                             # Continue without this refinement
+                        else:
+                            refined_responses.append(result)
 
             # Prepare final responses - use refined if available, otherwise initial
             final_responses = []
@@ -572,7 +610,8 @@ class ConsensusTool(SimpleTool):
 
                 if request.continuation_id:
                     # Continuing existing conversation
-                    thread_context = await asyncio.to_thread(get_thread, request.continuation_id)
+                    # Call synchronous function directly - it's fast enough
+                    thread_context = get_thread(request.continuation_id)
                     if thread_context and thread_context.turns:
                         turn_count = len(thread_context.turns)
                         if turn_count < MAX_CONVERSATION_TURNS - 1:
@@ -583,13 +622,11 @@ class ConsensusTool(SimpleTool):
                                 ", ".join(consulted_models) if consulted_models else "no successful models"
                             )
 
-                            # Format storage content in thread pool
-                            formatted_content = await asyncio.to_thread(
-                                self._format_consensus_for_storage, response_data
-                            )
+                            # Format storage content directly - it's just string manipulation
+                            formatted_content = self._format_consensus_for_storage(response_data)
                             
-                            await asyncio.to_thread(
-                                add_turn,
+                            # Call synchronous function directly
+                            add_turn(
                                 request.continuation_id,
                                 "assistant",
                                 formatted_content,
@@ -629,13 +666,11 @@ class ConsensusTool(SimpleTool):
                         "reasoning_effort": request.reasoning_effort,
                     }
 
-                    new_thread_id = await asyncio.to_thread(
-                        create_thread, tool_name="consensus", initial_request=initial_request_dict
-                    )
+                    # Call synchronous function directly
+                    new_thread_id = create_thread(tool_name="consensus", initial_request=initial_request_dict)
 
-                    # Add user's initial turn
-                    await asyncio.to_thread(
-                        add_turn,
+                    # Add user's initial turn - call directly
+                    add_turn(
                         new_thread_id,
                         "user",
                         request.prompt,
@@ -649,13 +684,11 @@ class ConsensusTool(SimpleTool):
                     consulted_models = [r["model"] for r in final_responses if r.get("status") == "success"]
                     model_names_str = ", ".join(consulted_models) if consulted_models else "no successful models"
 
-                    # Format storage content in thread pool
-                    formatted_content = await asyncio.to_thread(
-                        self._format_consensus_for_storage, response_data
-                    )
+                    # Format storage content directly
+                    formatted_content = self._format_consensus_for_storage(response_data)
                     
-                    await asyncio.to_thread(
-                        add_turn,
+                    # Call synchronous function directly
+                    add_turn(
                         new_thread_id,
                         "assistant",
                         formatted_content,
@@ -687,10 +720,8 @@ class ConsensusTool(SimpleTool):
             if continuation_offer:
                 response_data["continuation_offer"] = continuation_offer
 
-            # Serialize response data in thread pool to avoid blocking
-            json_response = await asyncio.to_thread(
-                json.dumps, response_data, indent=2, ensure_ascii=False
-            )
+            # Serialize response data
+            json_response = json.dumps(response_data, indent=2, ensure_ascii=False)
             return [TextContent(type="text", text=json_response)]
 
         except Exception as e:
@@ -700,11 +731,39 @@ class ConsensusTool(SimpleTool):
                 "error": str(e),
                 "metadata": {"tool_name": self.get_name(), "workflow_type": "parallel_consensus"},
             }
-            # Serialize error response in thread pool
-            json_error = await asyncio.to_thread(
-                json.dumps, error_response, indent=2, ensure_ascii=False
-            )
+            # Serialize error response
+            json_error = json.dumps(error_response, indent=2, ensure_ascii=False)
             return [TextContent(type="text", text=json_error)]
+
+    async def _consult_model_with_timeout(self, model_config: dict, request, phase: str = "initial", 
+                                          provider=None, model_context=None, system_prompt=None, 
+                                          phase_timeout: float = 300) -> dict:
+        """Consult a model with timeout wrapper."""
+        try:
+            return await asyncio.wait_for(
+                self._consult_model(model_config, request, phase, provider, model_context, system_prompt),
+                timeout=phase_timeout
+            )
+        except asyncio.TimeoutError:
+            model_name = model_config.get("model", "unknown")
+            raise asyncio.TimeoutError(f"Phase timeout exceeded ({phase_timeout}s) for model {model_name}")
+
+    async def _consult_model_with_feedback_with_timeout(self, model_config: dict, request, 
+                                                       initial_response: dict, other_responses: list[dict],
+                                                       phase: str = "refinement", provider=None, 
+                                                       system_prompt=None, phase_timeout: float = 300) -> dict:
+        """Consult a model with feedback and timeout wrapper."""
+        try:
+            return await asyncio.wait_for(
+                self._consult_model_with_feedback(
+                    model_config, request, initial_response, other_responses, 
+                    phase, provider, system_prompt
+                ),
+                timeout=phase_timeout
+            )
+        except asyncio.TimeoutError:
+            model_name = model_config.get("model", "unknown")
+            raise asyncio.TimeoutError(f"Refinement timeout exceeded ({phase_timeout}s) for model {model_name}")
 
     async def _consult_model(self, model_config: dict, request, phase: str = "initial", provider=None, model_context=None, system_prompt=None) -> dict:
         """Consult a single model and return its response."""
@@ -784,42 +843,26 @@ class ConsensusTool(SimpleTool):
                     logger.error(f"[CONSENSUS] Even truncated prompt too large: {e2}")
                     raise ValueError(f"Unable to fit prompt within token limits for {model_name}: {e2}")
 
-            # Call the model with timing and pass timeout to provider (use asyncio.to_thread for parallel execution)
+            # Call the model with timing
             start_time = time.time()
             model_timeout = self._get_model_timeout(model_name)
             logger.debug(f"[CONSENSUS] Calling {model_name} with timeout {model_timeout}s")
 
-            # Use semaphore to limit concurrent thread operations
-            async with _thread_semaphore:
-                # Get current event loop
-                loop = asyncio.get_event_loop()
-                
-                try:
-                    # Use custom thread pool executor instead of default
-                    # Create a wrapper function to pass timeout as keyword argument
-                    def generate_with_timeout():
-                        return provider.generate_content(
-                            prompt,
-                            model_name,
-                            system_prompt,
-                            request.temperature if request.temperature is not None else 0.2,
-                            None,  # max_output_tokens
-                            reasoning_effort=request.reasoning_effort,
-                            images=request.images if request.images else None,
-                            timeout=model_timeout,
-                        )
-                    
-                    response = await loop.run_in_executor(
-                        _thread_pool,
-                        generate_with_timeout
-                    )
-                finally:
-                    # NOTE: We cannot close providers here because they are singleton instances
-                    # shared across multiple models. Closing after one model finishes would
-                    # break it for other models using the same provider (e.g., both gemini-2.5-flash
-                    # and gemini-2.5-pro use the same GOOGLE provider instance).
-                    # Providers are properly cleaned up at server shutdown.
-                    pass
+            # Use native async method
+            # Add outer timeout as safety net
+            response = await asyncio.wait_for(
+                provider.agenerate_content(
+                    prompt,
+                    model_name,
+                    system_prompt,
+                    request.temperature if request.temperature is not None else 0.2,
+                    None,  # max_output_tokens
+                    reasoning_effort=request.reasoning_effort,
+                    images=request.images if request.images else None,
+                    timeout=model_timeout,
+                ),
+                timeout=model_timeout + 5  # Slightly larger outer timeout
+            )
 
             logger.debug(f"[CONSENSUS] {model_name} response received after {time.time() - start_time:.2f}s")
 
@@ -875,41 +918,25 @@ class ConsensusTool(SimpleTool):
             if system_prompt is None:
                 system_prompt = self.get_system_prompt()
 
-            # Call the model with the feedback and timing, pass timeout to provider (use asyncio.to_thread for parallel execution)
+            # Call the model with the feedback
             start_time = time.time()
             model_timeout = self._get_model_timeout(model_name)
             
-            # Use semaphore to limit concurrent thread operations
-            async with _thread_semaphore:
-                # Get current event loop
-                loop = asyncio.get_event_loop()
-                
-                try:
-                    # Use custom thread pool executor instead of default
-                    # Create a wrapper function to pass timeout as keyword argument
-                    def generate_with_timeout():
-                        return provider.generate_content(
-                            feedback_prompt,
-                            model_name,
-                            system_prompt,
-                            request.temperature if request.temperature is not None else 0.2,
-                            None,  # max_output_tokens
-                            reasoning_effort=request.reasoning_effort,
-                            images=request.images if request.images else None,
-                            timeout=model_timeout,
-                        )
-                    
-                    response = await loop.run_in_executor(
-                        _thread_pool,
-                        generate_with_timeout
-                    )
-                finally:
-                    # NOTE: We cannot close providers here because they are singleton instances
-                    # shared across multiple models. Closing after one model finishes would
-                    # break it for other models using the same provider (e.g., both gemini-2.5-flash
-                    # and gemini-2.5-pro use the same GOOGLE provider instance).
-                    # Providers are properly cleaned up at server shutdown.
-                    pass
+            # Use native async method to avoid all threading issues
+            # Add outer timeout as safety net
+            response = await asyncio.wait_for(
+                provider.agenerate_content(
+                    feedback_prompt,
+                    model_name,
+                    system_prompt,
+                    request.temperature if request.temperature is not None else 0.2,
+                    None,  # max_output_tokens
+                    reasoning_effort=request.reasoning_effort,
+                    images=request.images if request.images else None,
+                    timeout=model_timeout,
+                ),
+                timeout=model_timeout + 5  # Slightly larger outer timeout
+            )
 
             end_time = time.time()
             response_time = end_time - start_time

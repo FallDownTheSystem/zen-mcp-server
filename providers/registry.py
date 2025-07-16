@@ -1,5 +1,6 @@
 """Model provider registry for managing available providers."""
 
+import asyncio
 import logging
 import os
 import threading
@@ -9,6 +10,59 @@ from .base import ModelProvider, ProviderType
 
 if TYPE_CHECKING:
     from tools.models import ToolModelCategory
+
+
+class HybridLock:
+    """A lock that works in both sync and async contexts.
+    
+    Uses asyncio.Lock() when in an async context, threading.Lock() otherwise.
+    This prevents blocking the event loop when used from async code.
+    """
+    
+    def __init__(self):
+        self._thread_lock = threading.Lock()
+        self._async_locks = {}  # event_loop -> asyncio.Lock mapping
+        
+    def _get_lock(self):
+        """Get the appropriate lock for the current context."""
+        try:
+            loop = asyncio.get_running_loop()
+            # Get or create an async lock for this event loop
+            if loop not in self._async_locks:
+                self._async_locks[loop] = asyncio.Lock()
+                logging.debug(f"[HYBRIDLOCK] Created new async lock for loop {id(loop)}. Total locks: {len(self._async_locks)}")
+            return self._async_locks[loop]
+        except RuntimeError:
+            # No event loop, use threading lock
+            logging.debug(f"[HYBRIDLOCK] Using thread lock (no event loop)")
+            return self._thread_lock
+    
+    def __enter__(self):
+        """Sync context manager entry."""
+        return self._thread_lock.__enter__()
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Sync context manager exit."""
+        return self._thread_lock.__exit__(exc_type, exc_val, exc_tb)
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        lock = self._get_lock()
+        if hasattr(lock, '__aenter__'):
+            return await lock.__aenter__()
+        else:
+            # Fallback for threading lock in async context
+            # This is not ideal but prevents immediate failure
+            return lock.__enter__()
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        lock = self._get_lock()
+        if hasattr(lock, '__aexit__'):
+            return await lock.__aexit__(exc_type, exc_val, exc_tb)
+        else:
+            # Fallback for threading lock in async context
+            return lock.__exit__(exc_type, exc_val, exc_tb)
 
 
 class ModelProviderRegistry:
@@ -36,8 +90,9 @@ class ModelProviderRegistry:
                 # Initialize instance dictionaries on first creation
                 cls._instance._providers = {}
                 cls._instance._initialized_providers = {}
-                # Add instance-level lock for provider initialization
-                cls._instance._provider_lock = threading.Lock()
+                # Add instance-level hybrid lock for provider initialization
+                # Works in both sync and async contexts without blocking event loop
+                cls._instance._provider_lock = HybridLock()
                 logging.debug(f"REGISTRY: Created instance {cls._instance}")
         return cls._instance
 
@@ -131,6 +186,11 @@ class ModelProviderRegistry:
 
         Returns:
             ModelProvider instance that supports this model
+            
+        Warning:
+            This method uses threading locks. When called from async code,
+            it may block the event loop. Consider caching providers when
+            making multiple concurrent calls.
         """
         logging.debug(f"get_provider_for_model called with model_name='{model_name}'")
 
@@ -140,7 +200,6 @@ class ModelProviderRegistry:
             ProviderType.GOOGLE,  # Direct Gemini access
             ProviderType.OPENAI,  # Direct OpenAI access
             ProviderType.XAI,  # Direct X.AI GROK access
-            ProviderType.DIAL,  # DIAL unified API access
             ProviderType.CUSTOM,  # Local/self-hosted models
             ProviderType.OPENROUTER,  # Catch-all for cloud models
         ]
@@ -156,9 +215,23 @@ class ModelProviderRegistry:
                 if provider_type not in instance._providers:
                     logging.debug(f"{provider_type} not found in registry")
                     continue
+                logging.debug(f"[REGISTRY] Checking provider {provider_type} for model {model_name}")
 
             logging.debug(f"Found {provider_type} in registry")
+            
+            # Check if we already have this provider cached
+            if provider_type in instance._initialized_providers:
+                provider = instance._initialized_providers[provider_type]
+                if provider and provider.validate_model_name(model_name):
+                    logging.debug(f"{provider_type} (cached) validates model {model_name}")
+                    return provider
+                else:
+                    logging.debug(f"{provider_type} (cached) does not validate model {model_name}")
+                    continue
+            
+            # Only create provider if we don't have it cached
             # Get or create provider instance (this method is already thread-safe)
+            logging.info(f"[REGISTRY] Creating new provider instance for {provider_type}")
             provider = cls.get_provider(provider_type)
             if provider and provider.validate_model_name(model_name):
                 logging.debug(f"{provider_type} validates model {model_name}")
@@ -262,7 +335,6 @@ class ModelProviderRegistry:
             ProviderType.XAI: "XAI_API_KEY",
             ProviderType.OPENROUTER: "OPENROUTER_API_KEY",
             ProviderType.CUSTOM: "CUSTOM_API_KEY",  # Can be empty for providers that don't need auth
-            ProviderType.DIAL: "DIAL_API_KEY",
         }
 
         env_var = key_mapping.get(provider_type)

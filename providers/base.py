@@ -17,7 +17,6 @@ class ProviderType(Enum):
     XAI = "xai"
     OPENROUTER = "openrouter"
     CUSTOM = "custom"
-    DIAL = "dial"
 
 
 class TemperatureConstraint(ABC):
@@ -232,6 +231,53 @@ class ModelProvider(ABC):
 
         Returns:
             ModelResponse with generated content and metadata
+        """
+        pass
+
+    async def agenerate_content(
+        self,
+        prompt: str,
+        model_name: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        """Async version of generate_content.
+        
+        !! WARNING !!
+        This default implementation uses asyncio.to_thread to run the synchronous
+        `generate_content` method in a separate thread. This is a compatibility
+        layer for providers that do not have a native async implementation.
+
+        The underlying synchronous `generate_content` method MUST be truly
+        synchronous and not use any "async-aware" libraries (like httpx)
+        that might interact with the event loop, as this can cause deadlocks.
+        
+        By default, this wraps the synchronous version in asyncio.to_thread().
+        Providers should override this to use native async clients for better performance.
+        """
+        import asyncio
+        import logging
+        logging.debug(
+            f"Using fallback async implementation for {self.__class__.__name__}. "
+            "Consider implementing native async support for better performance."
+        )
+        return await asyncio.to_thread(
+            self.generate_content,
+            prompt,
+            model_name,
+            system_prompt,
+            temperature,
+            max_output_tokens,
+            **kwargs
+        )
+
+    async def aclose(self):
+        """
+        Close any open async connections.
+        Default implementation does nothing.
+        Providers with async clients should override this method.
         """
         pass
 

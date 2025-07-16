@@ -52,44 +52,45 @@ class TestModelResolutionBug:
         mock_response = Mock()
         mock_response.content = "Test response"
         mock_response.usage = {"input_tokens": 10, "output_tokens": 20}
-        mock_provider.generate_content.return_value = mock_response
 
-        # Track the model name passed to generate_content
+        # Track the model name passed to agenerate_content
         received_model_names = []
 
-        def track_generate_content(*args, **kwargs):
+        async def track_agenerate_content(*args, **kwargs):
             received_model_names.append(kwargs.get("model_name", args[1] if len(args) > 1 else "unknown"))
             return mock_response
 
-        mock_provider.generate_content.side_effect = track_generate_content
+        mock_provider.agenerate_content.side_effect = track_agenerate_content
 
         # Mock the get_model_provider to return our mock
         with patch.object(self.consensus_tool, "get_model_provider", return_value=mock_provider):
-            # Set initial prompt
-            self.consensus_tool.initial_prompt = "Test prompt"
+            # Mock the timeout method to return a numeric value
+            with patch.object(self.consensus_tool, "_get_model_timeout", return_value=600.0):
+                # Set initial prompt
+                self.consensus_tool.initial_prompt = "Test prompt"
 
-            # Create a mock request
-            request = Mock()
-            request.relevant_files = []
-            request.continuation_id = None
-            request.images = None
+                # Create a mock request
+                request = Mock()
+                request.relevant_files = []
+                request.continuation_id = None
+                request.images = None
 
-            # Test model consultation directly
-            result = asyncio.run(self.consensus_tool._consult_model({"model": "gemini", "stance": "neutral"}, request))
+                # Test model consultation directly
+                result = asyncio.run(self.consensus_tool._consult_model({"model": "gemini", "stance": "neutral"}, request))
 
-            # Verify that generate_content was called
-            assert len(received_model_names) == 1
+                # Verify that generate_content was called
+                assert len(received_model_names) == 1
 
-            # The consensus tool should pass the original alias "gemini"
-            # The OpenRouter provider should resolve it internally
-            received_model = received_model_names[0]
-            print(f"Model name passed to provider: {received_model}")
+                # The consensus tool should pass the original alias "gemini"
+                # The OpenRouter provider should resolve it internally
+                received_model = received_model_names[0]
+                print(f"Model name passed to provider: {received_model}")
 
-            assert received_model == "gemini", f"Expected 'gemini' to be passed to provider, got '{received_model}'"
+                assert received_model == "gemini", f"Expected 'gemini' to be passed to provider, got '{received_model}'"
 
-            # Verify the result structure
-            assert result["model"] == "gemini"
-            assert result["status"] == "success"
+                # Verify the result structure
+                assert result["model"] == "gemini"
+                assert result["status"] == "success"
 
     def test_bug_reproduction_with_malformed_model_name(self):
         """Test what happens when 'gemini-2.5-pro' (malformed) is passed to OpenRouter."""

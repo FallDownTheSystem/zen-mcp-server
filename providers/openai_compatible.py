@@ -10,7 +10,7 @@ from abc import abstractmethod
 from typing import Optional
 from urllib.parse import urlparse
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 from .base import (
     ModelCapabilities,
@@ -42,7 +42,9 @@ class OpenAICompatibleProvider(ModelProvider):
         """
         super().__init__(api_key, **kwargs)
         self._client = None
+        self._async_client = None
         self._client_lock = threading.Lock()  # Thread-safe lazy initialization
+        self._async_client_lock = None  # Will be initialized as asyncio.Lock when needed
         self.base_url = base_url
         self.organization = kwargs.get("organization")
         self.allowed_models = self._parse_allowed_models()
@@ -229,35 +231,30 @@ class OpenAICompatibleProvider(ModelProvider):
                 # Create httpx client with minimal config to avoid proxy conflicts
                 # Note: proxies parameter was removed in httpx 0.28.0
                 #
-                # CRITICAL: Create a synchronous httpx client to prevent asyncio deadlocks
-                # When this provider is called from asyncio.to_thread() (e.g., in the consensus tool),
-                # httpx's default transport can auto-detect the main thread's event loop and try to use it.
-                # This creates a deadlock: the event loop waits for the thread, while the thread waits
-                # for the event loop. We need to ensure the client is purely synchronous.
-                # DO NOT REMOVE THIS without understanding the deadlock implications!
+                # CRITICAL: Disable all connection pooling to prevent deadlocks
+                # The issue appears to be resource exhaustion in connection pools.
+                # By setting max_connections=1 and disabling keepalive, we force
+                # each request to use a new connection, preventing pool exhaustion.
                 #
-                # NOTE: httpx.RequestsTransport was removed in newer versions of httpx.
-                # Instead, we configure the httpx client to be purely synchronous by:
-                # 1. Disabling keepalive connections to prevent connection accumulation
-                # 2. Setting Connection: close header to force connection closure
-                # 3. Disabling trust_env to avoid async proxy detection
+                # This is less efficient but prevents the consistent deadlock pattern
+                # we see on the 5th call (2 models) or 3rd call (4 models).
                 
-                # Configure httpx client limits for connection management
+                # Configure httpx to disable connection pooling entirely
                 limits = httpx.Limits(
-                    max_connections=100,      # Total connections across all hosts
-                    max_keepalive_connections=0,  # Disable keepalive to prevent accumulation
-                    keepalive_expiry=0.0     # Disable keepalive completely
+                    max_connections=1,  # Only 1 connection at a time
+                    max_keepalive_connections=0,  # No keepalive
+                    keepalive_expiry=0.0,  # Disable keepalive
                 )
                 
-                # Create a synchronous httpx client
-                # Setting trust_env=False ensures it doesn't try to detect proxy settings
-                # which could cause additional async operations
+                # Create a minimal httpx client with no connection pooling
                 http_client = httpx.Client(
                     timeout=timeout_config,
                     limits=limits,
                     follow_redirects=True,
                     headers={"Connection": "close"},  # Force connection closure
-                    trust_env=False,  # Disable proxy detection to avoid async operations
+                    trust_env=False,  # Disable proxy detection
+                    http1=True,  # Use HTTP/1.1 only
+                    http2=False,  # Disable HTTP/2
                 )
 
                 # Keep client initialization minimal to avoid proxy parameter conflicts
@@ -276,10 +273,17 @@ class OpenAICompatibleProvider(ModelProvider):
                 if self.DEFAULT_HEADERS:
                     client_kwargs["default_headers"] = self.DEFAULT_HEADERS.copy()
 
-                logging.debug(f"OpenAI client initialized with custom httpx client and timeout: {timeout_config}")
+                logging.info(
+                    f"Creating OpenAI client with custom httpx config - "
+                    f"max_connections={limits.max_connections}, "
+                    f"keepalive={limits.max_keepalive_connections}, "
+                    f"timeout={timeout_config}"
+                )
 
                 # Create OpenAI client with custom httpx client
                 self._client = OpenAI(**client_kwargs)
+                
+                logging.info("Successfully created OpenAI client with connection pooling disabled")
 
             except Exception as e:
                 # CRITICAL: The custom httpx client is ESSENTIAL to prevent deadlocks
@@ -304,6 +308,89 @@ class OpenAICompatibleProvider(ModelProvider):
                     os.environ[var] = value
 
         return self._client
+
+    async def _get_async_client(self) -> AsyncOpenAI:
+        """
+        Initializes and returns the async client, ensuring thread-safe
+        initialization in async context.
+        """
+        if self._async_client is not None:
+            return self._async_client
+
+        # Create async lock on first use
+        if self._async_client_lock is None:
+            import asyncio
+            self._async_client_lock = asyncio.Lock()
+
+        async with self._async_client_lock:
+            # Double-check pattern for async safety
+            if self._async_client is not None:
+                return self._async_client
+
+            try:
+                import httpx
+                
+                # Create the same connection limits for async client to prevent pool exhaustion
+                limits = httpx.Limits(
+                    max_connections=1,  # Only 1 connection at a time
+                    max_keepalive_connections=0,  # No keepalive
+                    keepalive_expiry=0.0,  # Disable keepalive
+                )
+                
+                # Create custom async httpx client with same restrictions as sync
+                async_http_client = httpx.AsyncClient(
+                    timeout=self.timeout_config,
+                    limits=limits,
+                    follow_redirects=True,
+                    headers={"Connection": "close"},  # Force connection closure
+                    trust_env=False,  # Disable proxy detection
+                    http1=True,  # Use HTTP/1.1 only
+                    http2=False,  # Disable HTTP/2
+                )
+                
+                client_kwargs = {
+                    "api_key": self.api_key,
+                    "http_client": async_http_client,
+                }
+
+                if self.base_url:
+                    client_kwargs["base_url"] = self.base_url
+
+                if self.organization:
+                    client_kwargs["organization"] = self.organization
+
+                if self.DEFAULT_HEADERS:
+                    client_kwargs["default_headers"] = self.DEFAULT_HEADERS.copy()
+
+                logging.info(
+                    f"Creating AsyncOpenAI client with connection pooling disabled - "
+                    f"max_connections={limits.max_connections}, "
+                    f"keepalive={limits.max_keepalive_connections}"
+                )
+
+                # Create AsyncOpenAI client
+                self._async_client = AsyncOpenAI(**client_kwargs)
+                
+                logging.info("Successfully created AsyncOpenAI client for async operations")
+
+            except Exception as e:
+                logging.error(
+                    "Failed to create AsyncOpenAI client: %s",
+                    e,
+                    exc_info=True
+                )
+                raise RuntimeError(
+                    "Failed to initialize AsyncOpenAI client"
+                ) from e
+
+        return self._async_client
+
+    async def aclose(self):
+        """Close the async client if it was initialized."""
+        if self._async_client:
+            await self._async_client.close()
+            self._async_client = None
+            logging.info("Closed AsyncOpenAI client")
 
     def _safe_extract_output_text(self, response) -> str:
         """Safely extract output text from o3-pro response with validation.
@@ -598,6 +685,13 @@ class OpenAICompatibleProvider(ModelProvider):
                 **kwargs,
             )
 
+        # DEADLOCK_DEBUG: Log the actual payload size
+        import json
+        payload_json = json.dumps(completion_params)
+        payload_size = len(payload_json)
+        logging.warning(f"[DEADLOCK_DEBUG] OpenAI API request size: {payload_size:,} chars (~{payload_size//4:,} tokens)")
+        logging.warning(f"[DEADLOCK_DEBUG] Messages: {len(messages)} messages, prompt length: {len(prompt):,} chars")
+        
         # Retry logic with progressive delays
         max_retries = 4  # Total of 4 attempts
         retry_delays = [1, 3, 5, 8]  # Progressive delays: 1s, 3s, 5s, 8s
@@ -651,6 +745,197 @@ class OpenAICompatibleProvider(ModelProvider):
         error_msg = f"{self.FRIENDLY_NAME} API error for model {model_name} after {actual_attempts} attempt{'s' if actual_attempts > 1 else ''}: {str(last_exception)}"
         logging.error(error_msg)
         raise RuntimeError(error_msg) from last_exception
+
+    async def agenerate_content(
+        self,
+        prompt: str,
+        model_name: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        images: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        """Async version using native AsyncOpenAI client.
+        
+        This avoids all the threading and deadlock issues by using the async client directly.
+        """
+        # Handle o3-pro models differently - they use /v1/responses endpoint
+        if model_name.startswith("o3-pro"):
+            return await self._agenerate_o3_pro_response(
+                prompt=prompt,
+                model_name=model_name,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                images=images,
+                **kwargs,
+            )
+
+        # Standard chat completions for all other models
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        # Build user message with potential images
+        user_content = []
+        user_content.append({"type": "text", "text": prompt})
+
+        # Add images if provided and model supports vision
+        if images and self._supports_vision(model_name):
+            for image_path in images:
+                try:
+                    image_content = self._process_image(image_path)
+                    if image_content:
+                        user_content.append(image_content)
+                except Exception as e:
+                    logging.warning(f"Failed to process image {image_path}: {e}")
+                    continue
+        elif images and not self._supports_vision(model_name):
+            logging.warning(f"Model {model_name} does not support images, ignoring {len(images)} image(s)")
+
+        # Add user message
+        if len(user_content) == 1:
+            messages.append({"role": "user", "content": user_content[0]["text"]})
+        else:
+            messages.append({"role": "user", "content": user_content})
+
+        # Build completion parameters
+        completion_params = {
+            "model": model_name,
+            "messages": messages,
+        }
+
+        # Handle temperature based on model support
+        effective_temperature = self.get_effective_temperature(model_name, temperature)
+        if effective_temperature is not None:
+            completion_params["temperature"] = effective_temperature
+            supports_temperature = True
+        else:
+            supports_temperature = False
+        
+        # Handle thinking mode for supported models
+        reasoning_effort = kwargs.get("reasoning_effort", "medium")
+        if self.supports_thinking_mode(model_name):
+            completion_params["reasoning_effort"] = reasoning_effort
+
+        # Add max tokens if specified and model supports it
+        # O3/O4 models that don't support temperature also don't support max_tokens
+        if max_output_tokens and supports_temperature:
+            completion_params["max_tokens"] = max_output_tokens
+
+        # Get timeout from kwargs or use model-specific timeout
+        timeout = kwargs.get("timeout")
+
+        # Check if this is o3-pro or o3-deep-research and needs the responses endpoint
+        resolved_model = self._resolve_model_name(model_name)
+        if resolved_model in ["o3-pro-2025-06-10", "o3-deep-research-2025-06-26"]:
+            # These models require the /v1/responses endpoint
+            return await self._agenerate_o3_pro_response(
+                prompt=prompt,
+                model_name=resolved_model,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                images=images,
+                **kwargs,
+            )
+
+        # Use async client for the API call
+        try:
+            client = await self._get_async_client()
+            response = await client.chat.completions.create(**completion_params)
+
+            # Extract content and usage
+            content = response.choices[0].message.content
+            usage = self._extract_usage(response)
+
+            return ModelResponse(
+                content=content,
+                usage=usage,
+                model_name=model_name,
+                friendly_name=self.FRIENDLY_NAME,
+                provider=self.get_provider_type(),
+                metadata={
+                    "finish_reason": response.choices[0].finish_reason,
+                    "model": response.model,  # Actual model used
+                    "id": response.id,
+                    "created": response.created,
+                },
+            )
+
+        except Exception as e:
+            error_msg = f"{self.FRIENDLY_NAME} async API error for model {model_name}: {str(e)}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg) from e
+
+    async def _agenerate_o3_pro_response(
+        self,
+        prompt: str,
+        model_name: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        images: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        """Async version of o3-pro response generation."""
+        # Build the simplified request for /v1/responses endpoint
+        completion_params = {
+            "model": model_name,
+            "input": prompt,
+        }
+
+        if system_prompt:
+            completion_params["instructions"] = system_prompt
+
+        # o3-pro models use reasoning_effort instead of temperature
+        reasoning_effort = kwargs.get("reasoning_effort", "high")
+        completion_params["reasoning_effort"] = reasoning_effort
+
+        try:
+            # Use async client's responses endpoint
+            client = await self._get_async_client()
+            response = await client.responses.create(**completion_params)
+
+            # Extract content from o3-pro response
+            content = self._safe_extract_output_text(response)
+
+            # Extract usage information
+            usage = {}
+            if hasattr(response, "usage") and response.usage:
+                usage = {
+                    "input_tokens": getattr(response.usage, "input_tokens", 0) or 0,
+                    "output_tokens": getattr(response.usage, "output_tokens", 0) or 0,
+                    "total_tokens": getattr(response.usage, "total_tokens", 0) or 0,
+                }
+            elif hasattr(response, "input_tokens") and hasattr(response, "output_tokens"):
+                input_tokens = getattr(response, "input_tokens", 0) or 0
+                output_tokens = getattr(response, "output_tokens", 0) or 0
+                usage = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": input_tokens + output_tokens,
+                }
+
+            return ModelResponse(
+                content=content,
+                usage=usage,
+                model_name=model_name,
+                friendly_name=self.FRIENDLY_NAME,
+                provider=self.get_provider_type(),
+                metadata={
+                    "model": getattr(response, "model", model_name),
+                    "id": getattr(response, "id", ""),
+                    "created": getattr(response, "created_at", 0),
+                    "endpoint": "responses",
+                },
+            )
+
+        except Exception as e:
+            error_msg = f"o3-pro async API error: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            raise RuntimeError(error_msg) from e
 
     def count_tokens(self, text: str, model_name: str) -> int:
         """Count tokens for the given text.

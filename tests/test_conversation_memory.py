@@ -624,7 +624,7 @@ class TestConversationFlow:
             initial_context={"prompt": "Analyze this codebase", "relevant_files": ["/project/src/"]},
         )
 
-        history, tokens = build_conversation_history(final_context)
+        history, tokens = await build_conversation_history(final_context)
 
         # Verify chronological order and speaker identification
         assert "--- Turn 1 (Gemini using chat) ---" in history
