@@ -12,12 +12,71 @@ and inherit all the conversation, file processing, and model handling
 capabilities from BaseTool.
 """
 
+import asyncio
 from abc import abstractmethod
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Optional
 
 from tools.shared.base_models import ToolRequest
 from tools.shared.base_tool import BaseTool
 from tools.shared.schema_builders import SchemaBuilder
+
+
+# This function will run in a separate process for OpenAI calls
+def run_openai_in_process(provider_type_str, model_name, api_key, base_url, organization, prompt_data):
+    """
+    Synchronous wrapper to run an async OpenAI call in a dedicated process.
+    This prevents deadlocks by completely isolating the problematic OpenAI SDK.
+    """
+    import asyncio
+    import logging
+    import os
+    
+    # Set up logging in the child process
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("openai_process")
+    
+    logger.info(f"[PROCESS {os.getpid()}] Starting isolated OpenAI call for model {model_name}")
+    
+    # Re-create the provider inside the new process
+    from providers.registry import get_provider_for_model
+    from providers.base import ProviderType
+    
+    # Get fresh provider instance in this process
+    provider_info = get_provider_for_model(model_name)
+    if not provider_info:
+        raise ValueError(f"No provider found for model {model_name}")
+    
+    provider = provider_info["provider"]
+    
+    # Ensure provider has API credentials
+    if hasattr(provider, 'api_key') and not provider.api_key:
+        provider.api_key = api_key
+    if hasattr(provider, 'base_url') and base_url:
+        provider.base_url = base_url
+    if hasattr(provider, 'organization') and organization:
+        provider.organization = organization
+    
+    async def run_async():
+        """Run the async OpenAI call."""
+        logger.info(f"[PROCESS {os.getpid()}] Making OpenAI API call with {len(prompt_data['prompt'])} char prompt")
+        
+        # Use agenerate_content for async operation
+        result = await provider.agenerate_content(
+            prompt=prompt_data['prompt'],
+            model_name=prompt_data['model_name'],
+            system_prompt=prompt_data['system_prompt'],
+            temperature=prompt_data['temperature'],
+            max_output_tokens=prompt_data.get('max_output_tokens'),
+            reasoning_effort=prompt_data.get('reasoning_effort', 'medium'),
+            images=prompt_data.get('images'),
+        )
+        
+        logger.info(f"[PROCESS {os.getpid()}] OpenAI call completed successfully")
+        return result
+    
+    # Run the async function in a new event loop and return the result
+    return asyncio.run(run_async())
 
 
 class SimpleTool(BaseTool):
@@ -432,14 +491,60 @@ class SimpleTool(BaseTool):
 
             # Generate content with provider abstraction - with timing
             start_time = time.time()
-            model_response = provider.generate_content(
-                prompt=prompt,
-                model_name=self._current_model_name,
-                system_prompt=system_prompt,
-                temperature=temperature,
-                thinking_mode=reasoning_effort if provider.supports_thinking_mode(self._current_model_name) else None,
-                images=images if images else None,
-            )
+            
+            # FINAL FIX: Isolate OpenAI calls in a separate process to prevent deadlocks
+            from providers.base import ProviderType
+            
+            if provider.get_provider_type() == ProviderType.OPENAI:
+                logger.warning(f"[DEADLOCK FIX] Isolating OpenAI call for model '{self._current_model_name}' in a separate process")
+                
+                # Get the running asyncio loop and the process pool from the server
+                loop = asyncio.get_running_loop()
+                from server import server  # Import the global server instance
+                process_pool = server.process_pool
+                
+                # Prepare data to be sent to the child process
+                prompt_data = {
+                    'prompt': prompt,
+                    'model_name': self._current_model_name,
+                    'system_prompt': system_prompt,
+                    'temperature': temperature,
+                    'max_output_tokens': self._model_context.capabilities.max_output_tokens,
+                    'reasoning_effort': reasoning_effort if provider.supports_thinking_mode(self._current_model_name) else None,
+                    'images': images if images else None,
+                }
+                
+                # Get provider credentials
+                api_key = provider.api_key
+                base_url = getattr(provider, 'base_url', None)
+                organization = getattr(provider, 'organization', None)
+                
+                # Delegate the blocking function to the process executor
+                model_response = await loop.run_in_executor(
+                    process_pool, 
+                    run_openai_in_process, 
+                    provider.get_provider_type().value,
+                    self._current_model_name,
+                    api_key, 
+                    base_url, 
+                    organization, 
+                    prompt_data
+                )
+            else:
+                # For other providers (like Gemini), use async in-process as they are stable
+                logger.info(f"Running {provider.get_provider_type().value} call for {self.get_name()} in main process")
+                
+                # Use async agenerate_content to avoid sync-in-async issues
+                model_response = await provider.agenerate_content(
+                    prompt=prompt,
+                    model_name=self._current_model_name,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    max_output_tokens=self._model_context.capabilities.max_output_tokens,
+                    reasoning_effort=reasoning_effort if provider.supports_thinking_mode(self._current_model_name) else None,
+                    images=images if images else None,
+                )
+            
             end_time = time.time()
             response_time = end_time - start_time
 

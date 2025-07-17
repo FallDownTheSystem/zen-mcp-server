@@ -154,6 +154,20 @@ logger = logging.getLogger(__name__)
 # This name is used by MCP clients to identify and connect to this specific server
 server: Server = Server("zen-server")
 
+# Create a process pool for isolating problematic API calls (OpenAI deadlock fix)
+# max_workers=2 is sufficient for isolating OpenAI calls while not consuming too many resources
+from concurrent.futures import ProcessPoolExecutor
+server.process_pool = ProcessPoolExecutor(max_workers=2)
+
+# Register cleanup for the process pool
+def cleanup_process_pool():
+    """Cleanup function to gracefully shut down the process pool."""
+    logger.info("Shutting down process pool executor...")
+    server.process_pool.shutdown(wait=True)
+    logger.info("Process pool executor shut down successfully")
+
+atexit.register(cleanup_process_pool)
+
 
 # Constants for tool filtering
 ESSENTIAL_TOOLS = set()  # No essential tools needed with simplified setup
