@@ -6,7 +6,7 @@ requires-python = ">=3.9"
 dependencies = [
     "mcp>=1.0.0",
     "google-genai>=1.19.0",
-    "openai>=1.55.2",
+    "openai[aiohttp]>=1.55.2",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "requests>=2.25.0",  # Required for httpx.RequestsTransport to prevent asyncio deadlocks

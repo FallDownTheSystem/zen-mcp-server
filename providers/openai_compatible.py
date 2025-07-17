@@ -315,27 +315,42 @@ class OpenAICompatibleProvider(ModelProvider):
                 return self._async_client
 
             try:
-                import httpx
+                # Try to use aiohttp backend for better async performance
+                # This is recommended by OpenAI for improved concurrency
+                try:
+                    from openai import DefaultAioHttpClient
+                    logging.info("Using aiohttp backend for AsyncOpenAI client - better concurrency performance")
+                    
+                    client_kwargs = {
+                        "api_key": self.api_key,
+                        "http_client": DefaultAioHttpClient(
+                            timeout=self.timeout_config.total if hasattr(self.timeout_config, 'total') else 300.0
+                        ),
+                    }
+                except ImportError:
+                    # Fallback to httpx if aiohttp is not available
+                    logging.warning("aiohttp not available, falling back to httpx for AsyncOpenAI client")
+                    import httpx
 
-                # Create standard connection limits for async client
-                limits = httpx.Limits(
-                    max_connections=100,      # Total connections across all hosts
-                    max_keepalive_connections=20,  # Reasonable keepalive pool
-                    keepalive_expiry=30.0     # 30 second keepalive
-                )
+                    # Create standard connection limits for async client
+                    limits = httpx.Limits(
+                        max_connections=100,      # Total connections across all hosts
+                        max_keepalive_connections=20,  # Reasonable keepalive pool
+                        keepalive_expiry=30.0     # 30 second keepalive
+                    )
 
-                # Create async httpx client with standard settings
-                async_http_client = httpx.AsyncClient(
-                    timeout=self.timeout_config,
-                    limits=limits,
-                    follow_redirects=True,
-                    trust_env=False,  # Disable proxy detection to avoid conflicts
-                )
+                    # Create async httpx client with standard settings
+                    async_http_client = httpx.AsyncClient(
+                        timeout=self.timeout_config,
+                        limits=limits,
+                        follow_redirects=True,
+                        trust_env=False,  # Disable proxy detection to avoid conflicts
+                    )
 
-                client_kwargs = {
-                    "api_key": self.api_key,
-                    "http_client": async_http_client,
-                }
+                    client_kwargs = {
+                        "api_key": self.api_key,
+                        "http_client": async_http_client,
+                    }
 
                 if self.base_url:
                     client_kwargs["base_url"] = self.base_url
@@ -366,9 +381,19 @@ class OpenAICompatibleProvider(ModelProvider):
     async def aclose(self):
         """Close the async client if it was initialized."""
         if self._async_client:
-            await self._async_client.close()
-            self._async_client = None
-            logging.info("Closed AsyncOpenAI client")
+            try:
+                # Try to close the client properly
+                # The aiohttp backend doesn't have a close method, but httpx does
+                if hasattr(self._async_client, "close"):
+                    await self._async_client.close()
+                    logging.info("Closed AsyncOpenAI client")
+                else:
+                    # Using aiohttp backend which doesn't need explicit closing
+                    logging.debug("AsyncOpenAI client using aiohttp - no explicit close needed")
+            except Exception as e:
+                logging.warning(f"Error closing AsyncOpenAI client: {e}")
+            finally:
+                self._async_client = None
 
     def _safe_extract_output_text(self, response) -> str:
         """Safely extract output text from o3-pro response with validation.
