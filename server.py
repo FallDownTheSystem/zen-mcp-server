@@ -700,6 +700,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         result = await tool.execute(arguments)
         logger.info(f"Tool '{name}' execution completed")
 
+        await asyncio.sleep(1.0)  # Allow time for tool execution logging to flush
         # Log completion to activity file
         try:
             mcp_activity_logger = logging.getLogger("mcp_activity")
