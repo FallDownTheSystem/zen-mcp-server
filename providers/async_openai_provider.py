@@ -29,71 +29,120 @@ logger = logging.getLogger(__name__)
 class AsyncOpenAIProvider(ModelProvider):
     """Async-native OpenAI provider with proper concurrency handling."""
     
-    # Model configurations
+    # Model configurations - complete set matching AioHttpOpenAI provider
     SUPPORTED_MODELS = {
-        "o3-mini": ModelCapabilities(
-            provider=ProviderType.OPENAI,
-            model_name="o3-mini",
-            friendly_name="OpenAI o3-mini",
-            context_window=200000,
-            max_output_tokens=100000,
-            supports_extended_thinking=True,
-            supports_system_prompts=True,
-            supports_streaming=False,
-            supports_function_calling=True,
-            supports_images=False,
-            supports_temperature=True,
-            temperature_constraint=create_temperature_constraint("range"),
-            timeout=300.0,
-            description="OpenAI's o3-mini reasoning model with enhanced problem-solving capabilities",
-        ),
         "o3": ModelCapabilities(
             provider=ProviderType.OPENAI,
             model_name="o3",
-            friendly_name="OpenAI o3",
-            context_window=200000,
-            max_output_tokens=100000,
-            supports_extended_thinking=True,
+            friendly_name="OpenAI (O3)",
+            context_window=200_000,
+            max_output_tokens=100_000,
+            supports_extended_thinking=False,
             supports_system_prompts=True,
-            supports_streaming=False,
+            supports_streaming=True,
             supports_function_calling=True,
+            supports_json_mode=True,
             supports_images=True,
+            max_image_size_mb=20.0,
             supports_temperature=False,
             temperature_constraint=create_temperature_constraint("fixed"),
+            description="Strong reasoning (200K context) - Logical problems, code generation, systematic analysis",
+            aliases=[],
             timeout=300.0,
-            description="OpenAI's o3 reasoning model with enhanced problem-solving capabilities",
         ),
-        "gpt-4": ModelCapabilities(
+        "o3-mini": ModelCapabilities(
             provider=ProviderType.OPENAI,
-            model_name="gpt-4",
-            friendly_name="OpenAI GPT-4",
-            context_window=8192,
-            max_output_tokens=4096,
+            model_name="o3-mini",
+            friendly_name="OpenAI (O3-mini)",
+            context_window=200_000,
+            max_output_tokens=100_000,
             supports_extended_thinking=False,
             supports_system_prompts=True,
             supports_streaming=True,
             supports_function_calling=True,
-            supports_images=False,
-            supports_temperature=True,
-            temperature_constraint=create_temperature_constraint("range"),
-            timeout=120.0,
-            description="OpenAI's GPT-4 model for general-purpose tasks",
-        ),
-        "gpt-4o": ModelCapabilities(
-            provider=ProviderType.OPENAI,
-            model_name="gpt-4o",
-            friendly_name="OpenAI GPT-4o",
-            context_window=128000,
-            max_output_tokens=4096,
-            supports_extended_thinking=False,
-            supports_system_prompts=True,
-            supports_streaming=True,
-            supports_function_calling=True,
+            supports_json_mode=True,
             supports_images=True,
+            max_image_size_mb=20.0,
+            supports_temperature=False,
+            temperature_constraint=create_temperature_constraint("fixed"),
+            description="Fast O3 variant (200K context) - Balanced performance/speed, moderate complexity",
+            aliases=["o3mini", "o3-mini"],
+        ),
+        "o3-pro-2025-06-10": ModelCapabilities(
+            provider=ProviderType.OPENAI,
+            model_name="o3-pro-2025-06-10",
+            friendly_name="OpenAI (O3-Pro)",
+            context_window=200_000,
+            max_output_tokens=100_000,
+            supports_extended_thinking=False,
+            supports_system_prompts=True,
+            supports_streaming=True,
+            supports_function_calling=True,
+            supports_json_mode=True,
+            supports_images=True,
+            max_image_size_mb=20.0,
+            supports_temperature=False,
+            temperature_constraint=create_temperature_constraint("fixed"),
+            description="Professional-grade reasoning (200K context) - EXTREMELY EXPENSIVE: Only for the most complex problems requiring universe-scale complexity analysis OR when the user explicitly asks for this model. Use sparingly for critical architectural decisions or exceptionally complex debugging that other models cannot handle.",
+            aliases=["o3-pro"],
+            timeout=1800.0,
+        ),
+        "o3-deep-research-2025-06-26": ModelCapabilities(
+            provider=ProviderType.OPENAI,
+            model_name="o3-deep-research-2025-06-26",
+            friendly_name="OpenAI (O3-Deep-Research)",
+            context_window=200_000,
+            max_output_tokens=100_000,
+            supports_extended_thinking=False,
+            supports_system_prompts=True,
+            supports_streaming=True,
+            supports_function_calling=True,
+            supports_json_mode=True,
+            supports_images=True,
+            max_image_size_mb=20.0,
+            supports_temperature=False,
+            temperature_constraint=create_temperature_constraint("fixed"),
+            description="Deep research model (200K context) - Specialized for comprehensive analysis, literature review, and complex research tasks",
+            aliases=["o3-deep-research", "deep-research", "research", "o3-research"],
+            timeout=3600.0,
+        ),
+        "o4-mini": ModelCapabilities(
+            provider=ProviderType.OPENAI,
+            model_name="o4-mini",
+            friendly_name="OpenAI (O4-mini)",
+            context_window=200_000,
+            max_output_tokens=100_000,
+            supports_extended_thinking=False,
+            supports_system_prompts=True,
+            supports_streaming=True,
+            supports_function_calling=True,
+            supports_json_mode=True,
+            supports_images=True,
+            max_image_size_mb=20.0,
             supports_temperature=True,
             temperature_constraint=create_temperature_constraint("range"),
-            timeout=120.0,
-            description="OpenAI's GPT-4o model with vision capabilities",
+            description="Latest reasoning model (200K context) - Optimized for shorter contexts, rapid reasoning",
+            aliases=["o4mini"],
+            timeout=180.0,
+        ),
+        "gpt-4.1-2025-04-14": ModelCapabilities(
+            provider=ProviderType.OPENAI,
+            model_name="gpt-4.1-2025-04-14",
+            friendly_name="OpenAI (GPT-4.1)",
+            context_window=1_000_000,
+            max_output_tokens=32_768,
+            supports_extended_thinking=False,
+            supports_system_prompts=True,
+            supports_streaming=True,
+            supports_function_calling=True,
+            supports_json_mode=True,
+            supports_images=True,
+            max_image_size_mb=20.0,
+            supports_temperature=True,
+            temperature_constraint=create_temperature_constraint("range"),
+            description="GPT-4.1 (1M context) - Advanced reasoning model with large context window",
+            aliases=["gpt4.1"],
+            timeout=300.0,
         ),
     }
 
@@ -293,14 +342,20 @@ class AsyncOpenAIProvider(ModelProvider):
             raise RuntimeError(f"OpenAI API error: {e}")
     
     def _resolve_model_name(self, model_name: str) -> str:
-        """Resolve model name to canonical form."""
-        # Simple implementation - can be enhanced with aliases
+        """Resolve model name to canonical form, including aliases."""
         model_name_lower = model_name.lower()
         
         # Check exact matches first
         for supported_model in self.SUPPORTED_MODELS:
             if supported_model.lower() == model_name_lower:
                 return supported_model
-                
+        
+        # Check aliases
+        for supported_model, capabilities in self.SUPPORTED_MODELS.items():
+            if hasattr(capabilities, 'aliases') and capabilities.aliases:
+                for alias in capabilities.aliases:
+                    if alias.lower() == model_name_lower:
+                        return supported_model
+                        
         # Return as-is if not found
         return model_name

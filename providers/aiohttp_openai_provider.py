@@ -235,23 +235,36 @@ class AioHttpOpenAIProvider(ModelProvider):
         max_output_tokens: Optional[int] = None,
         **kwargs,
     ) -> ModelResponse:
-        """Synchronous wrapper - not recommended for this provider."""
+        """Synchronous wrapper that properly handles event loop contexts."""
         logger.warning(
             "Using synchronous generate_content with AioHttpOpenAI provider is not recommended. "
             "Use agenerate_content instead for better performance."
         )
         
-        async def _async_generate():
-            return await self.agenerate_content(
-                prompt=prompt,
-                model_name=model_name,
-                system_prompt=system_prompt,
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-                **kwargs
+        try:
+            # Check if we're already in an async context
+            loop = asyncio.get_running_loop()
+            logger.error(
+                "Cannot use synchronous generate_content from within async context. "
+                "The calling code should use agenerate_content instead."
             )
-        
-        return asyncio.run(_async_generate())
+            raise RuntimeError(
+                "AioHttpOpenAI provider cannot be used synchronously from async context. "
+                "Use agenerate_content instead, or switch to a different provider for sync usage."
+            )
+        except RuntimeError:
+            # No running event loop, we can create one
+            async def _async_generate():
+                return await self.agenerate_content(
+                    prompt=prompt,
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                    **kwargs
+                )
+            
+            return asyncio.run(_async_generate())
     
     async def agenerate_content(
         self,
