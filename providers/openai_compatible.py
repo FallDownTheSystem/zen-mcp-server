@@ -320,7 +320,7 @@ class OpenAICompatibleProvider(ModelProvider):
                 try:
                     from openai import DefaultAioHttpClient
                     logging.info("Using aiohttp backend for AsyncOpenAI client - better concurrency performance")
-                    
+
                     client_kwargs = {
                         "api_key": self.api_key,
                         "http_client": DefaultAioHttpClient(
