@@ -600,6 +600,34 @@ async def consensus(
         logger.error(f"Consensus tool error: {e}")
         return {"error": str(e)}
 
+@mcp.tool()
+async def test_custom_openai(ctx: Context = None) -> str:
+    """
+    Test tool for CustomOpenAI provider with 150k character payload.
+    
+    This tool tests the CustomOpenAI provider with a large payload to verify
+    it doesn't deadlock on large inputs. It uses o3-mini model directly.
+    """
+    try:
+        # Execute test tool
+        from tools.test_custom_openai import TestCustomOpenAITool
+        test_tool = TestCustomOpenAITool()
+        result = await test_tool.execute({})
+        
+        # Parse JSON result
+        if result and len(result) > 0:
+            import json
+            try:
+                return json.loads(result[0].text)
+            except json.JSONDecodeError:
+                return {"error": "Failed to parse test result", "raw_result": result[0].text}
+        else:
+            return {"error": "No test result generated"}
+    
+    except Exception as e:
+        logger.error(f"Test custom openai tool error: {e}")
+        return {"error": str(e)}
+
 @mcp.prompt(title="Chat Prompt")
 def chat_prompt(topic: str = "general") -> str:
     """Generate a chat prompt for the specified topic"""
@@ -627,7 +655,7 @@ def run():
         else:
             logger.info(f"Model mode: Fixed model '{DEFAULT_MODEL}'")
 
-        logger.info("Available tools: chat, consensus")
+        logger.info("Available tools: chat, consensus, test_custom_openai")
         logger.info("Server ready - waiting for tool requests...")
 
         # Run the FastMCP server with default transport
