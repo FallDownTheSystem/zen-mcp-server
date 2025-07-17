@@ -25,18 +25,18 @@ class XAIModelProvider(OpenAICompatibleProvider):
             provider=ProviderType.XAI,
             model_name="grok-4-0709",
             friendly_name="X.AI (Grok 4)",
-            context_window=131_072,  # 131K tokens
-            max_output_tokens=131072,
-            supports_extended_thinking=True,  # Grok-4 supports extended reasoning
+            context_window=256_000,  # 256K tokens
+            max_output_tokens=256_000,
+            supports_extended_thinking=False,  # Grok-4 doesn't support reasoning_effort parameter
             supports_system_prompts=True,
             supports_streaming=True,
             supports_function_calling=True,
             supports_json_mode=False,  # Assuming GROK doesn't have JSON mode yet
-            supports_images=False,  # Assuming GROK is text-only for now
-            max_image_size_mb=0.0,
+            supports_images=True,  # Grok-4 supports images
+            max_image_size_mb=20.0,  # Standard image size limit
             supports_temperature=True,
             temperature_constraint=create_temperature_constraint("range"),
-            description="GROK-4 (131K context) - Latest advanced reasoning model from X.AI with extended thinking capabilities",
+            description="GROK-4 (256K context) - Latest advanced model from X.AI with image support",
             aliases=["grok", "grok4", "grok-4", "grok-4-latest"],  # "grok" now defaults to grok-4
         ),
         "grok-3": ModelCapabilities(
@@ -148,12 +148,5 @@ class XAIModelProvider(OpenAICompatibleProvider):
 
     def supports_thinking_mode(self, model_name: str) -> bool:
         """Check if the model supports extended thinking mode."""
-        # Resolve model name to check actual model
-        resolved_name = self._resolve_model_name(model_name)
-
-        # GROK-4 supports extended thinking/reasoning mode
-        if resolved_name == "grok-4-0709":
-            return True
-
-        # Other GROK models do not support extended thinking
+        # No GROK models currently support the reasoning_effort parameter
         return False

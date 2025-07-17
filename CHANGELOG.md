@@ -1,5 +1,14 @@
 # Changelog
 
+## [6.6.10] - 2025-07-17
+
+### Fixed
+- Fixed Grok-4 model error by removing unsupported `reasoning_effort` parameter
+- Corrected Grok-4 configuration to not advertise extended thinking support
+
+### Added
+- Enabled image support for Grok-4 model (supports_images=True, max 20MB)
+
 ## [7.0.0] - 2025-07-17
 
 ### Breaking Changes
