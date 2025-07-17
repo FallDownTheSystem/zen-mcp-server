@@ -121,7 +121,7 @@ def configure_providers():
     from providers.base import ProviderType
     from providers.custom import CustomProvider
     from providers.gemini import GeminiModelProvider
-    from providers.openai_provider import OpenAIModelProvider
+    from providers.aiohttp_openai_provider import AioHttpOpenAIProvider
     from providers.openrouter import OpenRouterProvider
     from providers.xai import XAIModelProvider
     from utils.model_restrictions import get_restriction_service
@@ -142,7 +142,7 @@ def configure_providers():
     if openai_key and openai_key != "your_openai_api_key_here":
         valid_providers.append("OpenAI (o3)")
         has_native_apis = True
-        logger.info("OpenAI API key found - o3 model available")
+        logger.info("OpenAI API key found - o3 models available (using aiohttp provider)")
 
     xai_key = os.getenv("XAI_API_KEY")
     if xai_key and xai_key != "your_xai_api_key_here":
@@ -169,7 +169,7 @@ def configure_providers():
         if gemini_key and gemini_key != "your_gemini_api_key_here":
             ModelProviderRegistry.register_provider(ProviderType.GOOGLE, GeminiModelProvider)
         if openai_key and openai_key != "your_openai_api_key_here":
-            ModelProviderRegistry.register_provider(ProviderType.OPENAI, OpenAIModelProvider)
+            ModelProviderRegistry.register_provider(ProviderType.OPENAI, AioHttpOpenAIProvider)
         if xai_key and xai_key != "your_xai_api_key_here":
             ModelProviderRegistry.register_provider(ProviderType.XAI, XAIModelProvider)
 
