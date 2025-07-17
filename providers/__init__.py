@@ -3,7 +3,7 @@
 from .base import ModelCapabilities, ModelProvider, ModelResponse
 from .gemini import GeminiModelProvider
 from .openai_compatible import OpenAICompatibleProvider
-from .openai_provider import OpenAIModelProvider
+from .openai_provider import OpenAIProvider
 from .openrouter import OpenRouterProvider
 from .registry import ModelProviderRegistry
 
@@ -13,7 +13,7 @@ __all__ = [
     "ModelCapabilities",
     "ModelProviderRegistry",
     "GeminiModelProvider",
-    "OpenAIModelProvider",
+    "OpenAIProvider",
     "OpenAICompatibleProvider",
     "OpenRouterProvider",
 ]

@@ -1040,24 +1040,6 @@ def _get_tool_formatted_content(turn: ConversationTurn) -> list[str]:
     Returns:
         list[str]: Formatted content lines for this turn
     """
-    if turn.tool_name:
-        try:
-            # Dynamically import to avoid circular dependencies
-            from server import TOOLS
-
-            tool = TOOLS.get(turn.tool_name)
-            if tool:
-                # Use inheritance pattern - try to call the method directly
-                # If it doesn't exist or raises AttributeError, fall back to default
-                try:
-                    return tool.format_conversation_turn(turn)
-                except AttributeError:
-                    # Tool doesn't implement format_conversation_turn - use default
-                    pass
-        except Exception as e:
-            # Log but don't fail - fall back to default formatting
-            logger.debug(f"[HISTORY] Could not get tool-specific formatting for {turn.tool_name}: {e}")
-
     # Default formatting
     return _default_turn_formatting(turn)
 

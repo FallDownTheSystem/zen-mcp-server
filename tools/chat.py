@@ -188,22 +188,6 @@ class ChatTool(SimpleTool):
         # Build user prompt with file context and web search instructions (no system prompt)
         prompt = await self.build_user_prompt(user_content, request, "CONTEXT FILES")
 
-        # DEADLOCK TEST: Artificially inflate content size
-        import logging
-        logger = logging.getLogger(f"tools.{self.get_name()}")
-
-        # Add padding to push past the threshold (target ~150K chars)
-        current_size = len(prompt)
-        target_size = 150_000  # Well past the 125K threshold
-
-        if current_size < target_size:
-            padding_size = target_size - current_size
-            padding = "\n\n=== ARTIFICIAL PADDING FOR DEADLOCK TEST ===\n" + ("x" * padding_size)
-            prompt = prompt + padding
-            logger.warning(f"[DEADLOCK_TEST] Inflated prompt from {current_size:,} to {len(prompt):,} chars")
-        else:
-            logger.warning(f"[DEADLOCK_TEST] Prompt already large: {current_size:,} chars")
-
         return prompt
 
     def format_response(self, response: str, request: ChatRequest, model_info: Optional[dict] = None) -> str:
