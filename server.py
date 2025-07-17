@@ -629,7 +629,7 @@ if __name__ == "__main__":
         logger.info("Available tools: chat, consensus")
         logger.info("Server ready - waiting for tool requests...")
 
-        # Run the FastMCP server with stdio transport (for Claude Code compatibility)
-        mcp.run(transport="stdio")
+        # Run the FastMCP server with default transport
+        mcp.run()
     except KeyboardInterrupt:
         pass
