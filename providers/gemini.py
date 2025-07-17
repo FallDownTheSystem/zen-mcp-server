@@ -93,7 +93,7 @@ class GeminiModelProvider(ModelProvider):
             temperature_constraint=create_temperature_constraint("range"),
             max_thinking_tokens=32768,  # Max thinking tokens for Pro model
             description="Deep reasoning + thinking mode (1M context) - Complex problems, architecture, deep analysis",
-            aliases=["pro", "gemini pro", "gemini-pro"],
+            aliases=["pro", "gemini pro", "gemini-pro", "gemini"],
         ),
     }
 
