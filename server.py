@@ -610,7 +610,8 @@ def consensus_prompt(question: str = "a complex decision") -> str:
     """Generate a consensus prompt for multi-model analysis"""
     return f"Let's gather consensus on {question} using multiple AI models for diverse perspectives."
 
-if __name__ == "__main__":
+def run():
+    """Main entry point for the server - used by uvx and script installations"""
     try:
         # Configure providers
         configure_providers()
@@ -633,3 +634,6 @@ if __name__ == "__main__":
         mcp.run()
     except KeyboardInterrupt:
         pass
+
+if __name__ == "__main__":
+    run()
