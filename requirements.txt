@@ -3,6 +3,7 @@ google-genai>=1.19.0
 openai[aiohttp]>=1.55.2  # Minimum version for httpx 0.28.0 compatibility, with aiohttp for better async performance
 pydantic>=2.11.0
 python-dotenv>=1.0.0
+litellm>=1.74.3  # Unified LLM API interface
 requests>=2.25.0  # Required for various HTTP operations
 
 # Development dependencies (install with pip install -r requirements-dev.txt)

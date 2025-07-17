@@ -9,17 +9,18 @@ dependencies = [
     "openai[aiohttp]>=1.55.2",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    "litellm>=1.74.3",
     "requests>=2.25.0",  # Required for httpx.RequestsTransport to prevent asyncio deadlocks
 ]
 
 [tool.setuptools.packages.find]
-include = ["tools*", "providers*", "systemprompts*", "utils*"]
+include = ["tools*", "providers*", "systemprompts*", "utils*", "observability*"]
 
 [tool.setuptools]
 py-modules = ["server", "config"]
 
 [tool.setuptools.package-data]
-"*" = ["conf/*.json"]
+"*" = ["conf/*.json", "*.yaml"]
 
 [tool.setuptools.data-files]
 "conf" = ["conf/custom_models.json"]

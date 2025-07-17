@@ -16,6 +16,7 @@ class ProviderType(Enum):
     OPENAI = "openai"
     XAI = "xai"
     OPENROUTER = "openrouter"
+    LITELLM = "litellm"
     CUSTOM = "custom"
 
 

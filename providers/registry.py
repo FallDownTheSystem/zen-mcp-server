@@ -334,6 +334,7 @@ class ModelProviderRegistry:
             ProviderType.OPENAI: "OPENAI_API_KEY",
             ProviderType.XAI: "XAI_API_KEY",
             ProviderType.OPENROUTER: "OPENROUTER_API_KEY",
+            ProviderType.LITELLM: "LITELLM_API_KEY",  # Can be empty for LiteLLM as it uses provider-specific keys
             ProviderType.CUSTOM: "CUSTOM_API_KEY",  # Can be empty for providers that don't need auth
         }
 
