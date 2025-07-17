@@ -24,6 +24,7 @@ import logging
 import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Optional
@@ -150,23 +151,12 @@ except Exception as e:
 logger = logging.getLogger(__name__)
 
 
-# Create the MCP server instance with a unique name identifier
-# This name is used by MCP clients to identify and connect to this specific server
-server: Server = Server("zen-server")
+# Placeholder for the server instance that will be initialized in main()
+# This prevents child processes from re-initializing when importing this module
+server: Optional[Server] = None
 
-# Create a process pool for isolating problematic API calls (OpenAI deadlock fix)
-# max_workers=2 is sufficient for isolating OpenAI calls while not consuming too many resources
-from concurrent.futures import ProcessPoolExecutor
-server.process_pool = ProcessPoolExecutor(max_workers=2)
-
-# Register cleanup for the process pool
-def cleanup_process_pool():
-    """Cleanup function to gracefully shut down the process pool."""
-    logger.info("Shutting down process pool executor...")
-    server.process_pool.shutdown(wait=True)
-    logger.info("Process pool executor shut down successfully")
-
-atexit.register(cleanup_process_pool)
+# Process pool will also be initialized in main()
+process_pool: Optional[ProcessPoolExecutor] = None
 
 
 # Constants for tool filtering
@@ -480,7 +470,6 @@ def configure_providers():
             )
 
 
-@server.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """
     List all available tools with their descriptions and input schemas.
@@ -541,7 +530,6 @@ async def handle_list_tools() -> list[Tool]:
     return tools
 
 
-@server.call_tool()
 async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """
     Handle incoming tool execution requests from MCP clients.
@@ -656,6 +644,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         # Skip model resolution for tools that don't require models (e.g., planner)
         if not tool.requires_model():
             logger.debug(f"Tool {name} doesn't require model resolution - skipping model validation")
+            # Add process pool even for tools that don't require models
+            arguments["_process_pool"] = process_pool
             # Execute tool directly without model context
             return await tool.execute(arguments)
 
@@ -710,6 +700,9 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
                 logger.warning(f"File size check failed for {name} with model {model_name}")
                 return [TextContent(type="text", text=ToolOutput(**file_size_check).model_dump_json())]
 
+        # Add process pool to arguments for tools that need it
+        arguments["_process_pool"] = process_pool
+        
         # Execute tool with pre-resolved model context
         result = await tool.execute(arguments)
         logger.info(f"Tool '{name}' execution completed")
@@ -1054,7 +1047,6 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
     return enhanced_arguments
 
 
-@server.list_prompts()
 async def handle_list_prompts() -> list[Prompt]:
     """
     List all available prompts for Claude Code shortcuts.
@@ -1104,7 +1096,6 @@ async def handle_list_prompts() -> list[Prompt]:
     return prompts
 
 
-@server.get_prompt()
 async def handle_get_prompt(name: str, arguments: dict[str, Any] = None) -> GetPromptResult:
     """
     Get prompt details and generate the actual prompt text.
@@ -1218,6 +1209,28 @@ async def main():
     The server communicates via standard input/output streams using the
     MCP protocol's JSON-RPC message format.
     """
+    global server, process_pool
+    
+    # Initialize server and process pool here to prevent child process re-initialization
+    server = Server("zen-server")
+    process_pool = ProcessPoolExecutor(max_workers=2)
+    
+    # Register cleanup for the process pool
+    def cleanup_process_pool():
+        """Cleanup function to gracefully shut down the process pool."""
+        logger.info("Shutting down process pool executor...")
+        if process_pool:
+            process_pool.shutdown(wait=True)
+        logger.info("Process pool executor shut down successfully")
+    
+    atexit.register(cleanup_process_pool)
+    
+    # Register handlers on the server instance
+    server.list_tools()(handle_list_tools)
+    server.call_tool()(handle_call_tool)
+    server.list_prompts()(handle_list_prompts)
+    server.get_prompt()(handle_get_prompt)
+    
     # Validate and configure providers based on available API keys
     configure_providers()
 

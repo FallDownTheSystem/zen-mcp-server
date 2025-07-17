@@ -38,23 +38,14 @@ def run_openai_in_process(provider_type_str, model_name, api_key, base_url, orga
     
     logger.info(f"[PROCESS {os.getpid()}] Starting isolated OpenAI call for model {model_name}")
     
-    # Re-create the provider inside the new process
-    from providers.registry import get_provider_for_model
-    from providers.base import ProviderType
+    # Directly create OpenAI provider to avoid importing server module
+    from providers.openai_provider import OpenAIModelProvider
     
-    # Get fresh provider instance in this process
-    provider_info = get_provider_for_model(model_name)
-    if not provider_info:
-        raise ValueError(f"No provider found for model {model_name}")
-    
-    provider = provider_info["provider"]
-    
-    # Ensure provider has API credentials
-    if hasattr(provider, 'api_key') and not provider.api_key:
-        provider.api_key = api_key
-    if hasattr(provider, 'base_url') and base_url:
+    # Create fresh provider instance in this process
+    provider = OpenAIModelProvider(api_key=api_key)
+    if base_url:
         provider.base_url = base_url
-    if hasattr(provider, 'organization') and organization:
+    if organization:
         provider.organization = organization
     
     async def run_async():
@@ -498,10 +489,12 @@ class SimpleTool(BaseTool):
             if provider.get_provider_type() == ProviderType.OPENAI:
                 logger.warning(f"[DEADLOCK FIX] Isolating OpenAI call for model '{self._current_model_name}' in a separate process")
                 
-                # Get the running asyncio loop and the process pool from the server
+                # Get the running asyncio loop and the process pool from arguments
                 loop = asyncio.get_running_loop()
-                from server import server  # Import the global server instance
-                process_pool = server.process_pool
+                process_pool = arguments.get("_process_pool")
+                
+                if not process_pool:
+                    raise RuntimeError("ProcessPoolExecutor not found in arguments. Server setup is incorrect.")
                 
                 # Prepare data to be sent to the child process
                 prompt_data = {
