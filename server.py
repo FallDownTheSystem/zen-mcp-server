@@ -629,8 +629,8 @@ def main():
     logger.info("Available tools: chat, consensus")
     logger.info("Server ready - waiting for tool requests...")
 
-    # Run the FastMCP server
-    mcp.run()
+    # Run the FastMCP server with stdio transport (for Claude Code compatibility)
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
     try:
