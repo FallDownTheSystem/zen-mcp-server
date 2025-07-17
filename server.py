@@ -600,12 +600,12 @@ async def consensus(
         logger.error(f"Consensus tool error: {e}")
         return {"error": str(e)}
 
-@mcp.prompt()
+@mcp.prompt(title="Chat Prompt")
 def chat_prompt(topic: str = "general") -> str:
     """Generate a chat prompt for the specified topic"""
     return f"Let's chat about {topic}. What would you like to discuss?"
 
-@mcp.prompt()
+@mcp.prompt(title="Consensus Prompt")
 def consensus_prompt(question: str = "a complex decision") -> str:
     """Generate a consensus prompt for multi-model analysis"""
     return f"Let's gather consensus on {question} using multiple AI models for diverse perspectives."
