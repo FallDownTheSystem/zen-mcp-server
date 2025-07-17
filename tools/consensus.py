@@ -348,6 +348,13 @@ class ConsensusTool(SimpleTool):
                 model_name = model_config.get("model")
                 logger.info(f"[CONSENSUS] Getting provider for {model_name}")
                 provider = self.get_model_provider(model_name)
+                
+                # Validate that we got a provider - if not, the model is unknown
+                if not provider:
+                    logger.error(f"[CONSENSUS] No provider found for model '{model_name}' - model not recognized")
+                    # Skip this model and continue with others
+                    continue
+                    
                 provider_map[model_name] = provider  # Store for reuse
                 model_context = ModelContext(model_name)
                 model_resources.append((model_config, provider, model_context))

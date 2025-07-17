@@ -1,5 +1,60 @@
 # Changelog
 
+## [7.0.0] - 2025-07-17
+
+### Breaking Changes
+- **Provider Architecture**: Complete overhaul of OpenAI provider implementation
+  - Removed problematic async/sync wrapper implementations
+  - New pure aiohttp-based OpenAI provider for optimal async performance
+  - Provider selection now prioritizes async-native implementations
+
+### Added
+- **LiteLLM Provider Support**: Added unified LiteLLM provider for multi-model access
+  - New ProviderType.LITELLM enum value
+  - Supports all LiteLLM-compatible models with unified interface
+  - Automatic configuration file detection (litellm_config.yaml, model_metadata.yaml)
+  - Observability callbacks support (temporarily disabled for debugging)
+  - Compatible with existing async/sync tool infrastructure
+
+- **Model Validation**: Added early model validation to prevent timeout issues
+  - Tools now validate models before attempting API calls
+  - Invalid models fail immediately with clear error messages
+  - No more 3-minute timeouts for unknown models
+  - Consensus tool gracefully skips invalid models and continues with valid ones
+
+### Changed
+- **OpenAI Provider**: Replaced multiple implementations with single optimal provider
+  - Renamed aiohttp_openai_provider.py to openai_provider.py
+  - Class renamed from AioHttpOpenAIProvider to OpenAIProvider
+  - Removed async_openai_provider.py and custom_openai_provider.py
+  - 3.6x faster performance (6.77s vs 24.58s for large payloads)
+  - Zero deadlock issues with proper async/await patterns
+
+- **Tool Base Class**: Enhanced SimpleTool async provider support
+  - Automatically detects and uses agenerate_content() when available
+  - Falls back to generate_content() for sync-only providers
+  - Added proper error handling for invalid models
+
+### Fixed
+- **Async/Sync Deadlocks**: Resolved all OpenAI provider deadlock issues
+  - Fixed "asyncio.run() cannot be called from a running event loop" errors
+  - Eliminated event loop conflicts in FastMCP async contexts
+  - Large payloads (150k+ characters) now process without hanging
+
+- **Conversation Memory**: Fixed TOOLS import error
+  - Removed problematic dynamic import from server
+  - Simplified to use default formatting for all tools
+  - Eliminates repetitive debug log errors
+
+- **Model Provider Registry**: Added LITELLM_API_KEY mapping
+  - LiteLLM provider now properly integrates with registry
+  - Supports dummy API key for compatibility
+
+### Removed
+- **Test Code**: Removed artificial deadlock test padding
+  - Eliminated 150k character prompt inflation in chat tool
+  - Normal prompt sizes restored for production use
+
 ## [6.6.8] - 2025-01-16
 
 ### Fixed

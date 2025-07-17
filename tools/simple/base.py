@@ -324,8 +324,18 @@ class SimpleTool(BaseTool):
                 # Create model context if not provided
                 from utils.model_context import ModelContext
 
-                self._model_context = ModelContext(model_name)
-                logger.debug(f"{self.get_name()}: Created model context for {model_name}")
+                try:
+                    self._model_context = ModelContext(model_name)
+                    logger.debug(f"{self.get_name()}: Created model context for {model_name}")
+                except ValueError as e:
+                    # Model not recognized - return error immediately
+                    error_response = {
+                        "status": "error",
+                        "content": f"Model '{model_name}' is not recognized. {str(e)}",
+                        "content_type": "text",
+                        "metadata": {"error_type": "invalid_model", "model_name": model_name}
+                    }
+                    return [TextContent(type="text", text=json.dumps(error_response, ensure_ascii=False))]
 
             # Get images if present
             images = self.get_request_images(request)

@@ -74,7 +74,7 @@ class GeminiModelProvider(ModelProvider):
             temperature_constraint=create_temperature_constraint("range"),
             max_thinking_tokens=24576,  # Flash 2.5 thinking budget limit
             description="Ultra-fast (1M context) - Quick analysis, simple queries, rapid iterations",
-            aliases=["flash", "flash2.5"],
+            aliases=["flash", "flash2.5", "gemini-flash", "gemini-flash-2.5"],
         ),
         "gemini-2.5-pro": ModelCapabilities(
             provider=ProviderType.GOOGLE,
