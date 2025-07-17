@@ -610,30 +610,26 @@ def consensus_prompt(question: str = "a complex decision") -> str:
     """Generate a consensus prompt for multi-model analysis"""
     return f"Let's gather consensus on {question} using multiple AI models for diverse perspectives."
 
-def main():
-    """Main entry point for the FastMCP server"""
-    # Configure providers
-    configure_providers()
-
-    # Log startup
-    logger.info("Zen FastMCP Server starting up...")
-    logger.info(f"Log level: {log_level}")
-    logger.info(f"Server version: {__version__}")
-
-    from config import IS_AUTO_MODE
-    if IS_AUTO_MODE:
-        logger.info("Model mode: AUTO (Claude will select the best model for each task)")
-    else:
-        logger.info(f"Model mode: Fixed model '{DEFAULT_MODEL}'")
-
-    logger.info("Available tools: chat, consensus")
-    logger.info("Server ready - waiting for tool requests...")
-
-    # Run the FastMCP server with stdio transport (for Claude Code compatibility)
-    mcp.run(transport="stdio")
-
 if __name__ == "__main__":
     try:
-        main()
+        # Configure providers
+        configure_providers()
+
+        # Log startup
+        logger.info("Zen FastMCP Server starting up...")
+        logger.info(f"Log level: {log_level}")
+        logger.info(f"Server version: {__version__}")
+
+        from config import IS_AUTO_MODE
+        if IS_AUTO_MODE:
+            logger.info("Model mode: AUTO (Claude will select the best model for each task)")
+        else:
+            logger.info(f"Model mode: Fixed model '{DEFAULT_MODEL}'")
+
+        logger.info("Available tools: chat, consensus")
+        logger.info("Server ready - waiting for tool requests...")
+
+        # Run the FastMCP server with stdio transport (for Claude Code compatibility)
+        mcp.run(transport="stdio")
     except KeyboardInterrupt:
         pass
