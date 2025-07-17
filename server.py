@@ -614,19 +614,46 @@ async def test_custom_openai(ctx: Context = None) -> str:
         test_tool = TestCustomOpenAITool()
         result = await test_tool.execute({})
         
-        # Parse JSON result
+        # Parse JSON result and return as formatted string
         if result and len(result) > 0:
             import json
             try:
-                return json.loads(result[0].text)
+                result_data = json.loads(result[0].text)
+                
+                # Format the result as a readable string
+                if result_data.get("status") == "success":
+                    metadata = result_data.get("metadata", {})
+                    return f"""CustomOpenAI Provider Test Results:
+
+Status: ✅ SUCCESS
+Model: {metadata.get('model', 'o3-mini')}
+Provider: {metadata.get('provider', 'CustomOpenAI')}
+Prompt Length: {metadata.get('prompt_length', 'unknown'):,} characters
+Response Length: {metadata.get('response_length', 'unknown'):,} characters
+Response Time: {metadata.get('response_time', 'unknown'):.2f} seconds
+Tokens Used: {metadata.get('tokens_used', {}).get('total_tokens', 'unknown')}
+
+The CustomOpenAI provider successfully processed a large payload without deadlocking.
+
+Response Content:
+{result_data.get('content', 'No content available')}"""
+                else:
+                    # Error case
+                    return f"""CustomOpenAI Provider Test Results:
+
+Status: ❌ ERROR
+Error: {result_data.get('content', 'Unknown error')}
+
+The test failed. Check the error details above."""
+                    
             except json.JSONDecodeError:
-                return {"error": "Failed to parse test result", "raw_result": result[0].text}
+                return f"Error: Failed to parse test result.\nRaw result: {result[0].text}"
         else:
-            return {"error": "No test result generated"}
+            return "Error: No test result generated"
     
     except Exception as e:
         logger.error(f"Test custom openai tool error: {e}")
-        return {"error": str(e)}
+        return f"Error: {str(e)}"
 
 @mcp.prompt(title="Chat Prompt")
 def chat_prompt(topic: str = "general") -> str:
