@@ -18,11 +18,11 @@ class HybridLock:
     Uses asyncio.Lock() when in an async context, threading.Lock() otherwise.
     This prevents blocking the event loop when used from async code.
     """
-    
+
     def __init__(self):
         self._thread_lock = threading.Lock()
         self._async_locks = {}  # event_loop -> asyncio.Lock mapping
-        
+
     def _get_lock(self):
         """Get the appropriate lock for the current context."""
         try:
@@ -34,17 +34,17 @@ class HybridLock:
             return self._async_locks[loop]
         except RuntimeError:
             # No event loop, use threading lock
-            logging.debug(f"[HYBRIDLOCK] Using thread lock (no event loop)")
+            logging.debug("[HYBRIDLOCK] Using thread lock (no event loop)")
             return self._thread_lock
-    
+
     def __enter__(self):
         """Sync context manager entry."""
         return self._thread_lock.__enter__()
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Sync context manager exit."""
         return self._thread_lock.__exit__(exc_type, exc_val, exc_tb)
-    
+
     async def __aenter__(self):
         """Async context manager entry."""
         lock = self._get_lock()
@@ -54,7 +54,7 @@ class HybridLock:
             # Fallback for threading lock in async context
             # This is not ideal but prevents immediate failure
             return lock.__enter__()
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         lock = self._get_lock()
@@ -218,7 +218,7 @@ class ModelProviderRegistry:
                 logging.debug(f"[REGISTRY] Checking provider {provider_type} for model {model_name}")
 
             logging.debug(f"Found {provider_type} in registry")
-            
+
             # Check if we already have this provider cached
             if provider_type in instance._initialized_providers:
                 provider = instance._initialized_providers[provider_type]
@@ -228,7 +228,7 @@ class ModelProviderRegistry:
                 else:
                     logging.debug(f"{provider_type} (cached) does not validate model {model_name}")
                     continue
-            
+
             # Only create provider if we don't have it cached
             # Get or create provider instance (this method is already thread-safe)
             logging.info(f"[REGISTRY] Creating new provider instance for {provider_type}")

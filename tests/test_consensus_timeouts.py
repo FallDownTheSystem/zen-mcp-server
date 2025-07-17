@@ -186,7 +186,7 @@ class TestConsensusTimeoutExecution(unittest.TestCase):
         # Create async mock for agenerate_content
         async def mock_agenerate_content(*args, **kwargs):
             return mock_response
-        
+
         mock_provider.agenerate_content = Mock(side_effect=mock_agenerate_content)
         mock_provider.get_provider_type.return_value = ProviderType.OPENAI
 

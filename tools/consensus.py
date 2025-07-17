@@ -16,7 +16,6 @@ Key features:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 
@@ -24,32 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Global lock for thread extraction to prevent race conditions
 _extraction_lock = asyncio.Lock()
-
-# Increase the default thread pool size to prevent exhaustion
-# The default is min(32, (os.cpu_count() or 1) + 4) which might be too small
-# With multiple consensus calls, each using multiple threads, we can exhaust the pool
-def _ensure_thread_pool():
-    """Ensure the event loop has a thread pool with enough workers."""
-    try:
-        loop = asyncio.get_running_loop()
-        # Set a larger thread pool executor if not already set
-        if not hasattr(loop, '_zen_executor_set'):
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=100, thread_name_prefix="zen-consensus")
-            loop.set_default_executor(executor)
-            loop._zen_executor_set = True
-            loop._zen_resource_count = 0  # Track resource usage
-            logger.info(f"[CONSENSUS] Set default executor with 100 workers. Executor: {executor}, max_workers: {executor._max_workers}")
-        else:
-            # Log current executor state
-            default_executor = getattr(loop, '_default_executor', None)
-            if default_executor and hasattr(default_executor, '_max_workers'):
-                logger.info(f"[CONSENSUS] Executor already set with {default_executor._max_workers} workers")
-    except RuntimeError:
-        # No running loop yet, this is fine
-        pass
-
-# Call this when the module is imported
-_ensure_thread_pool()
 
 import os
 import time
@@ -274,10 +247,10 @@ class ConsensusTool(SimpleTool):
         if model_name in self._timeout_cache:
             logger.debug(f"[CONSENSUS] Using cached timeout for {model_name}: {self._timeout_cache[model_name]}s")
             return self._timeout_cache[model_name]
-        
+
         logger.debug(f"[CONSENSUS] Getting timeout for model {model_name} (not cached)")
         timeout = self._get_consensus_timeout()  # Default fallback
-        
+
         try:
             # Get the provider for this model
             provider = self.get_model_provider(model_name)
@@ -329,25 +302,8 @@ class ConsensusTool(SimpleTool):
     async def execute(self, arguments: dict[str, Any]) -> list:
         """Execute parallel consensus with optional cross-model feedback."""
         logger.debug(f"[CONSENSUS] Execute called with continuation_id: {arguments.get('continuation_id', 'None')}")
-        
-        # Ensure we have a large enough thread pool
-        _ensure_thread_pool()
-        
-        # Log current thread pool state
-        try:
-            loop = asyncio.get_running_loop()
-            executor = getattr(loop, '_default_executor', None)
-            if executor:
-                max_workers = getattr(executor, '_max_workers', 'Unknown')
-                logger.info(f"[CONSENSUS] Current executor max_workers: {max_workers}")
-                # Count active threads
-                if hasattr(executor, '_threads'):
-                    logger.info(f"[CONSENSUS] Active executor threads: {len(executor._threads)}")
-            else:
-                logger.warning("[CONSENSUS] No default executor found!")
-        except Exception as e:
-            logger.error(f"[CONSENSUS] Error checking executor: {e}")
-        
+
+
         # Clear timeout cache for fresh execution
         self._timeout_cache.clear()
         logger.debug("[CONSENSUS] Cleared timeout cache for new execution")
@@ -371,15 +327,15 @@ class ConsensusTool(SimpleTool):
 
             # Get providers and create model contexts before async tasks to avoid concurrent access
             from utils.model_context import ModelContext
-            
+
             # Get system prompt once for all models
             system_prompt = self.get_system_prompt()
             logger.debug(f"[CONSENSUS] System prompt length: {len(system_prompt)} chars")
-            
+
             # Create a provider map to reuse in refinement phase
             provider_map = {}
             model_resources = []
-            
+
             # Track resource count
             try:
                 loop = asyncio.get_running_loop()
@@ -387,7 +343,7 @@ class ConsensusTool(SimpleTool):
                     logger.info(f"[CONSENSUS] Resource count before provider creation: {loop._zen_resource_count}")
             except:
                 pass
-                
+
             for model_config in self.models_to_consult:
                 model_name = model_config.get("model")
                 logger.info(f"[CONSENSUS] Getting provider for {model_name}")
@@ -396,7 +352,7 @@ class ConsensusTool(SimpleTool):
                 model_context = ModelContext(model_name)
                 model_resources.append((model_config, provider, model_context))
                 logger.debug(f"[CONSENSUS] Pre-created resources for {model_name}")
-                
+
                 # Increment resource count
                 try:
                     loop = asyncio.get_running_loop()
@@ -405,7 +361,7 @@ class ConsensusTool(SimpleTool):
                         logger.info(f"[CONSENSUS] Resource count after {model_name}: {loop._zen_resource_count}")
                 except:
                     pass
-            
+
             # Calculate phase timeout based on model requirements
             phase_timeout = self._get_phase_timeout(self.models_to_consult)
             logger.info(f"Phase 1 timeout set to {phase_timeout}s")
@@ -493,7 +449,7 @@ class ConsensusTool(SimpleTool):
                                 continue
                             refinement_tasks.append(
                                 self._consult_model_with_feedback_with_timeout(
-                                    model_config, request, response, other_responses, 
+                                    model_config, request, response, other_responses,
                                     phase="refinement", provider=provider, system_prompt=system_prompt,
                                     phase_timeout=refinement_timeout
                                 )
@@ -504,7 +460,7 @@ class ConsensusTool(SimpleTool):
                 if refinement_tasks:
                     # Execute all refinement tasks in parallel with return_exceptions=True
                     refinement_results = await asyncio.gather(*refinement_tasks, return_exceptions=True)
-                    
+
                     # Process refinement results
                     for i, result in enumerate(refinement_results):
                         if isinstance(result, Exception):
@@ -624,7 +580,7 @@ class ConsensusTool(SimpleTool):
 
                             # Format storage content directly - it's just string manipulation
                             formatted_content = self._format_consensus_for_storage(response_data)
-                            
+
                             # Call synchronous function directly
                             add_turn(
                                 request.continuation_id,
@@ -686,7 +642,7 @@ class ConsensusTool(SimpleTool):
 
                     # Format storage content directly
                     formatted_content = self._format_consensus_for_storage(response_data)
-                    
+
                     # Call synchronous function directly
                     add_turn(
                         new_thread_id,
@@ -735,8 +691,8 @@ class ConsensusTool(SimpleTool):
             json_error = json.dumps(error_response, indent=2, ensure_ascii=False)
             return [TextContent(type="text", text=json_error)]
 
-    async def _consult_model_with_timeout(self, model_config: dict, request, phase: str = "initial", 
-                                          provider=None, model_context=None, system_prompt=None, 
+    async def _consult_model_with_timeout(self, model_config: dict, request, phase: str = "initial",
+                                          provider=None, model_context=None, system_prompt=None,
                                           phase_timeout: float = 300) -> dict:
         """Consult a model with timeout wrapper."""
         try:
@@ -748,15 +704,15 @@ class ConsensusTool(SimpleTool):
             model_name = model_config.get("model", "unknown")
             raise asyncio.TimeoutError(f"Phase timeout exceeded ({phase_timeout}s) for model {model_name}")
 
-    async def _consult_model_with_feedback_with_timeout(self, model_config: dict, request, 
+    async def _consult_model_with_feedback_with_timeout(self, model_config: dict, request,
                                                        initial_response: dict, other_responses: list[dict],
-                                                       phase: str = "refinement", provider=None, 
+                                                       phase: str = "refinement", provider=None,
                                                        system_prompt=None, phase_timeout: float = 300) -> dict:
         """Consult a model with feedback and timeout wrapper."""
         try:
             return await asyncio.wait_for(
                 self._consult_model_with_feedback(
-                    model_config, request, initial_response, other_responses, 
+                    model_config, request, initial_response, other_responses,
                     phase, provider, system_prompt
                 ),
                 timeout=phase_timeout
@@ -817,7 +773,7 @@ class ConsensusTool(SimpleTool):
                 system_prompt = self.get_system_prompt()
                 logger.debug(f"[CONSENSUS] System prompt length: {len(system_prompt)} chars")
             else:
-                logger.debug(f"[CONSENSUS] Using pre-fetched system prompt")
+                logger.debug("[CONSENSUS] Using pre-fetched system prompt")
 
             # Validate prompt size using the standard validation method
             combined_prompt = f"{system_prompt}\n\n{prompt}"
@@ -921,7 +877,7 @@ class ConsensusTool(SimpleTool):
             # Call the model with the feedback
             start_time = time.time()
             model_timeout = self._get_model_timeout(model_name)
-            
+
             # Use native async method to avoid all threading issues
             # Add outer timeout as safety net
             response = await asyncio.wait_for(
@@ -1015,20 +971,20 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
     def _extract_previous_consensus(self, continuation_id: str) -> dict[str, str]:
         """Extract model responses from previous consensus turns in the conversation."""
         logger.debug(f"[CONSENSUS] Extracting previous consensus for continuation_id: {continuation_id}")
-        
+
         from utils.conversation_memory import get_thread
 
-        logger.debug(f"[CONSENSUS] About to call get_thread")
+        logger.debug("[CONSENSUS] About to call get_thread")
         thread = get_thread(continuation_id)
         logger.debug(f"[CONSENSUS] get_thread returned: {thread is not None}")
-        
+
         if not thread:
             logger.debug(f"[CONSENSUS] No thread found for continuation_id: {continuation_id}")
             return {}
 
         consensus_responses = {}
         logger.debug(f"[CONSENSUS] Found thread with {len(thread.turns)} turns")
-        
+
         # Check thread size to see if data explosion is happening
         try:
             import sys
@@ -1043,19 +999,19 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
         # Walk through turns to find consensus responses
         for i, turn in enumerate(thread.turns):
             logger.debug(f"[CONSENSUS] Processing turn {i}, tool: {getattr(turn, 'tool_name', 'None')}, role: {getattr(turn, 'role', 'None')}")
-            
+
             # Special logging for turn 5 which seems to be where it hangs
             if i == 5:
-                logger.debug(f"[CONSENSUS] CRITICAL: Starting to process turn 5")
+                logger.debug("[CONSENSUS] CRITICAL: Starting to process turn 5")
                 logger.debug(f"[CONSENSUS] Turn 5 has model_metadata: {hasattr(turn, 'model_metadata') and turn.model_metadata is not None}")
                 if hasattr(turn, 'model_metadata') and turn.model_metadata:
                     logger.debug(f"[CONSENSUS] Turn 5 model_metadata keys: {list(turn.model_metadata.keys())}")
-                    
+
             try:
                 if turn.tool_name == "consensus" and turn.role == "assistant":
                     logger.debug(f"[CONSENSUS] Found consensus turn at index {i}")
                     # Check if we have consensus data in metadata
-                    logger.debug(f"[CONSENSUS] Checking model_metadata existence")
+                    logger.debug("[CONSENSUS] Checking model_metadata existence")
                     if turn.model_metadata and "consensus_data" in turn.model_metadata:
                         logger.debug(f"[CONSENSUS] Found consensus_data in turn {i}")
                         consensus_data = turn.model_metadata["consensus_data"]
@@ -1064,12 +1020,12 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
                             if not isinstance(responses, list):
                                 logger.warning(f"[CONSENSUS] Invalid responses type at turn {i}: {type(responses)}")
                                 continue
-                            
+
                             for j, response in enumerate(responses):
                                 if not isinstance(response, dict):
                                     logger.warning(f"[CONSENSUS] Invalid response type at turn {i}, response {j}: {type(response)}")
                                     continue
-                                    
+
                                 model = response.get("model")
                                 content = response.get("response")
                                 if model and content and response.get("status") == "success":
@@ -1080,7 +1036,7 @@ Use the same format as before (## Approach, ## Why This Works, ## Implementation
             except Exception as e:
                 logger.error(f"[CONSENSUS] Error processing turn {i}: {type(e).__name__}: {str(e)}")
                 continue
-        
+
         logger.debug(f"[CONSENSUS] Finished processing all {len(thread.turns)} turns")
         logger.debug(f"[CONSENSUS] Total consensus responses extracted: {len(consensus_responses)}")
         return consensus_responses

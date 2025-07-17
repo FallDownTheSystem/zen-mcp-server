@@ -81,12 +81,12 @@ class ModelContext:
     def capabilities(self) -> ModelCapabilities:
         """Get model capabilities lazily."""
         if self._capabilities is None:
-            logger.debug(f"[MODEL_CONTEXT] Capabilities not cached, getting provider")
+            logger.debug("[MODEL_CONTEXT] Capabilities not cached, getting provider")
             provider = self.provider
             logger.debug(f"[MODEL_CONTEXT] Got provider: {provider}")
             logger.debug(f"[MODEL_CONTEXT] Calling get_capabilities for {self.model_name}")
             self._capabilities = provider.get_capabilities(self.model_name)
-            logger.debug(f"[MODEL_CONTEXT] Got capabilities from provider")
+            logger.debug("[MODEL_CONTEXT] Got capabilities from provider")
         return self._capabilities
 
     def calculate_token_allocation(self, reserved_for_response: Optional[int] = None) -> TokenAllocation:

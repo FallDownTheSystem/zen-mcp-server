@@ -4,13 +4,12 @@ import base64
 import ipaddress
 import logging
 import os
-import threading
 import time
 from abc import abstractmethod
 from typing import Optional
 from urllib.parse import urlparse
 
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from .base import (
     ModelCapabilities,
@@ -41,9 +40,7 @@ class OpenAICompatibleProvider(ModelProvider):
             **kwargs: Additional configuration options including timeout
         """
         super().__init__(api_key, **kwargs)
-        self._client = None
         self._async_client = None
-        self._client_lock = threading.Lock()  # Thread-safe lazy initialization
         self._async_client_lock = None  # Will be initialized as asyncio.Lock when needed
         self.base_url = base_url
         self.organization = kwargs.get("organization")
@@ -51,6 +48,10 @@ class OpenAICompatibleProvider(ModelProvider):
 
         # Configure timeouts - especially important for custom/local endpoints
         self.timeout_config = self._configure_timeouts(**kwargs)
+
+        # Initialize client eagerly to avoid threading.Lock deadlocks
+        # This happens once during provider creation, eliminating race conditions
+        self._client = self._initialize_sync_client()
 
         # Validate base URL for security
         if self.base_url:
@@ -197,116 +198,102 @@ class OpenAICompatibleProvider(ModelProvider):
                 raise
             raise ValueError(f"Invalid base URL '{self.base_url}': {str(e)}")
 
+    def _initialize_sync_client(self):
+        """Initialize OpenAI client with security checks and timeout configuration.
+        
+        This method is called once during provider initialization to avoid
+        threading.Lock deadlocks that occur with lazy initialization.
+        """
+        import os
+
+        import httpx
+
+        # Temporarily disable proxy environment variables to prevent httpx from detecting them
+        original_env = {}
+        proxy_env_vars = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]
+
+        for var in proxy_env_vars:
+            if var in os.environ:
+                original_env[var] = os.environ[var]
+                del os.environ[var]
+
+        try:
+            # Create a custom httpx client that explicitly avoids proxy parameters
+            timeout_config = (
+                self.timeout_config
+                if hasattr(self, "timeout_config") and self.timeout_config
+                else httpx.Timeout(300.0)  # 5 minutes default for o3-pro and other long-running models
+            )
+
+            # Create httpx client with minimal config to avoid proxy conflicts
+            # Note: proxies parameter was removed in httpx 0.28.0
+            #
+            # Create httpx client with standard connection pooling settings
+            # The deadlock issue was actually caused by threading.Lock interaction
+            # with asyncio, not connection pool exhaustion
+            limits = httpx.Limits(
+                max_connections=100,      # Total connections across all hosts
+                max_keepalive_connections=20,  # Reasonable keepalive pool
+                keepalive_expiry=30.0     # 30 second keepalive
+            )
+
+            # Create httpx client with standard settings
+            http_client = httpx.Client(
+                timeout=timeout_config,
+                limits=limits,
+                follow_redirects=True,
+                trust_env=False,  # Disable proxy detection to avoid conflicts
+            )
+
+            # Keep client initialization minimal to avoid proxy parameter conflicts
+            client_kwargs = {
+                "api_key": self.api_key,
+                "http_client": http_client,
+            }
+
+            if self.base_url:
+                client_kwargs["base_url"] = self.base_url
+
+            if self.organization:
+                client_kwargs["organization"] = self.organization
+
+            # Add default headers if any
+            if self.DEFAULT_HEADERS:
+                client_kwargs["default_headers"] = self.DEFAULT_HEADERS.copy()
+
+            logging.debug(f"Creating OpenAI client with httpx timeout: {timeout_config}")
+
+            # Create and return OpenAI client with custom httpx client
+            return OpenAI(**client_kwargs)
+
+        except Exception as e:
+            # CRITICAL: The custom httpx client is ESSENTIAL to prevent deadlocks
+            # when running in an asyncio event loop via to_thread. Falling back
+            # to the default client is known to cause hangs.
+            logging.error(
+                "CRITICAL: Failed to create OpenAI client with custom httpx configuration. "
+                "This will likely lead to deadlocks in consensus tool. "
+                "Error: %s",
+                e,
+                exc_info=True  # Log the full traceback for debugging
+            )
+            # Re-raising the exception is safer than continuing with a known-bad configuration.
+            # The provider will fail to initialize, but this is better than a production deadlock.
+            raise RuntimeError(
+                "Failed to initialize a deadlock-safe HTTP client for OpenAI provider. "
+                "The custom httpx client configuration is required to prevent asyncio deadlocks."
+            ) from e
+        finally:
+            # Restore original proxy environment variables
+            for var, value in original_env.items():
+                os.environ[var] = value
+
     @property
     def client(self):
-        """Lazy and thread-safe initialization of OpenAI client with security checks and timeout configuration."""
-        if self._client is not None:
-            return self._client
-
-        with self._client_lock:
-            # Double-check in case another thread initialized it while we waited for the lock
-            if self._client is not None:
-                return self._client
-            import os
-
-            import httpx
-
-            # Temporarily disable proxy environment variables to prevent httpx from detecting them
-            original_env = {}
-            proxy_env_vars = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]
-
-            for var in proxy_env_vars:
-                if var in os.environ:
-                    original_env[var] = os.environ[var]
-                    del os.environ[var]
-
-            try:
-                # Create a custom httpx client that explicitly avoids proxy parameters
-                timeout_config = (
-                    self.timeout_config
-                    if hasattr(self, "timeout_config") and self.timeout_config
-                    else httpx.Timeout(300.0)  # 5 minutes default for o3-pro and other long-running models
-                )
-
-                # Create httpx client with minimal config to avoid proxy conflicts
-                # Note: proxies parameter was removed in httpx 0.28.0
-                #
-                # CRITICAL: Disable all connection pooling to prevent deadlocks
-                # The issue appears to be resource exhaustion in connection pools.
-                # By setting max_connections=1 and disabling keepalive, we force
-                # each request to use a new connection, preventing pool exhaustion.
-                #
-                # This is less efficient but prevents the consistent deadlock pattern
-                # we see on the 5th call (2 models) or 3rd call (4 models).
-                
-                # Configure httpx to disable connection pooling entirely
-                limits = httpx.Limits(
-                    max_connections=1,  # Only 1 connection at a time
-                    max_keepalive_connections=0,  # No keepalive
-                    keepalive_expiry=0.0,  # Disable keepalive
-                )
-                
-                # Create a minimal httpx client with no connection pooling
-                http_client = httpx.Client(
-                    timeout=timeout_config,
-                    limits=limits,
-                    follow_redirects=True,
-                    headers={"Connection": "close"},  # Force connection closure
-                    trust_env=False,  # Disable proxy detection
-                    http1=True,  # Use HTTP/1.1 only
-                    http2=False,  # Disable HTTP/2
-                )
-
-                # Keep client initialization minimal to avoid proxy parameter conflicts
-                client_kwargs = {
-                    "api_key": self.api_key,
-                    "http_client": http_client,
-                }
-
-                if self.base_url:
-                    client_kwargs["base_url"] = self.base_url
-
-                if self.organization:
-                    client_kwargs["organization"] = self.organization
-
-                # Add default headers if any
-                if self.DEFAULT_HEADERS:
-                    client_kwargs["default_headers"] = self.DEFAULT_HEADERS.copy()
-
-                logging.info(
-                    f"Creating OpenAI client with custom httpx config - "
-                    f"max_connections={limits.max_connections}, "
-                    f"keepalive={limits.max_keepalive_connections}, "
-                    f"timeout={timeout_config}"
-                )
-
-                # Create OpenAI client with custom httpx client
-                self._client = OpenAI(**client_kwargs)
-                
-                logging.info("Successfully created OpenAI client with connection pooling disabled")
-
-            except Exception as e:
-                # CRITICAL: The custom httpx client is ESSENTIAL to prevent deadlocks
-                # when running in an asyncio event loop via to_thread. Falling back
-                # to the default client is known to cause hangs.
-                logging.error(
-                    "CRITICAL: Failed to create OpenAI client with custom httpx configuration. "
-                    "This will likely lead to deadlocks in consensus tool. "
-                    "Error: %s",
-                    e,
-                    exc_info=True  # Log the full traceback for debugging
-                )
-                # Re-raising the exception is safer than continuing with a known-bad configuration.
-                # The provider will fail to initialize, but this is better than a production deadlock.
-                raise RuntimeError(
-                    "Failed to initialize a deadlock-safe HTTP client for OpenAI provider. "
-                    "The custom httpx client configuration is required to prevent asyncio deadlocks."
-                ) from e
-            finally:
-                # Restore original proxy environment variables
-                for var, value in original_env.items():
-                    os.environ[var] = value
-
+        """Return the initialized OpenAI client.
+        
+        Client is initialized eagerly in __init__ to avoid threading.Lock deadlocks.
+        """
         return self._client
 
     async def _get_async_client(self) -> AsyncOpenAI:
@@ -329,25 +316,22 @@ class OpenAICompatibleProvider(ModelProvider):
 
             try:
                 import httpx
-                
-                # Create the same connection limits for async client to prevent pool exhaustion
+
+                # Create standard connection limits for async client
                 limits = httpx.Limits(
-                    max_connections=1,  # Only 1 connection at a time
-                    max_keepalive_connections=0,  # No keepalive
-                    keepalive_expiry=0.0,  # Disable keepalive
+                    max_connections=100,      # Total connections across all hosts
+                    max_keepalive_connections=20,  # Reasonable keepalive pool
+                    keepalive_expiry=30.0     # 30 second keepalive
                 )
-                
-                # Create custom async httpx client with same restrictions as sync
+
+                # Create async httpx client with standard settings
                 async_http_client = httpx.AsyncClient(
                     timeout=self.timeout_config,
                     limits=limits,
                     follow_redirects=True,
-                    headers={"Connection": "close"},  # Force connection closure
-                    trust_env=False,  # Disable proxy detection
-                    http1=True,  # Use HTTP/1.1 only
-                    http2=False,  # Disable HTTP/2
+                    trust_env=False,  # Disable proxy detection to avoid conflicts
                 )
-                
+
                 client_kwargs = {
                     "api_key": self.api_key,
                     "http_client": async_http_client,
@@ -362,16 +346,10 @@ class OpenAICompatibleProvider(ModelProvider):
                 if self.DEFAULT_HEADERS:
                     client_kwargs["default_headers"] = self.DEFAULT_HEADERS.copy()
 
-                logging.info(
-                    f"Creating AsyncOpenAI client with connection pooling disabled - "
-                    f"max_connections={limits.max_connections}, "
-                    f"keepalive={limits.max_keepalive_connections}"
-                )
+                logging.debug("Creating AsyncOpenAI client for async operations")
 
                 # Create AsyncOpenAI client
                 self._async_client = AsyncOpenAI(**client_kwargs)
-                
-                logging.info("Successfully created AsyncOpenAI client for async operations")
 
             except Exception as e:
                 logging.error(
@@ -691,7 +669,7 @@ class OpenAICompatibleProvider(ModelProvider):
         payload_size = len(payload_json)
         logging.warning(f"[DEADLOCK_DEBUG] OpenAI API request size: {payload_size:,} chars (~{payload_size//4:,} tokens)")
         logging.warning(f"[DEADLOCK_DEBUG] Messages: {len(messages)} messages, prompt length: {len(prompt):,} chars")
-        
+
         # Retry logic with progressive delays
         max_retries = 4  # Total of 4 attempts
         retry_delays = [1, 3, 5, 8]  # Progressive delays: 1s, 3s, 5s, 8s
@@ -813,7 +791,7 @@ class OpenAICompatibleProvider(ModelProvider):
             supports_temperature = True
         else:
             supports_temperature = False
-        
+
         # Handle thinking mode for supported models
         reasoning_effort = kwargs.get("reasoning_effort", "medium")
         if self.supports_thinking_mode(model_name):

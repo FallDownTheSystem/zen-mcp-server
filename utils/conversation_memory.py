@@ -738,7 +738,7 @@ async def build_conversation_history(
     # Get the complete thread chain
     logger.debug(f"[HISTORY] Checking for parent thread: {context.parent_thread_id}")
     if context.parent_thread_id:
-        logger.debug(f"[HISTORY] Thread has parent, calling get_thread_chain")
+        logger.debug("[HISTORY] Thread has parent, calling get_thread_chain")
         # This thread has a parent, get the full chain
         chain = get_thread_chain(context.thread_id)
         logger.debug(f"[HISTORY] get_thread_chain returned {len(chain)} threads")
@@ -799,7 +799,7 @@ async def build_conversation_history(
     logger.debug(f"[HISTORY] Using model-specific limits for {model_context.model_name}:")
     logger.debug(f"[HISTORY]   Max file tokens: {max_file_tokens:,}")
     logger.debug(f"[HISTORY]   Max history tokens: {max_history_tokens:,}")
-    logger.debug(f"[HISTORY] About to build history parts")
+    logger.debug("[HISTORY] About to build history parts")
 
     history_parts = [
         "=== CONVERSATION HISTORY (CONTINUATION) ===",

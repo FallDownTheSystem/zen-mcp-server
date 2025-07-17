@@ -218,7 +218,7 @@ class GeminiModelProvider(ModelProvider):
         content_size = len(content_json)
         logging.warning(f"[DEADLOCK_DEBUG] Gemini API request size: {content_size:,} chars (~{content_size//4:,} tokens)")
         logging.warning(f"[DEADLOCK_DEBUG] Prompt length: {len(prompt):,} chars, parts count: {len(parts)}")
-        
+
         # Retry logic with progressive delays
         max_retries = 4  # Total of 4 attempts
         retry_delays = [1, 3, 5, 8]  # Progressive delays: 1s, 3s, 5s, 8s
@@ -504,16 +504,16 @@ class GeminiModelProvider(ModelProvider):
         # Validate parameters
         resolved_name = self._resolve_model_name(model_name)
         self.validate_parameters(model_name, temperature)
-        
+
         # Prepare content parts (text and potentially images)
         parts = []
-        
+
         # Add system and user prompts as text
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
         else:
             full_prompt = prompt
-        
+
         parts.append({"text": full_prompt})
 
         # Add images if provided and model supports them
