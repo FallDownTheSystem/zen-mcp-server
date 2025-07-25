@@ -132,8 +132,8 @@ class MemoryContinuationStore extends ContinuationStoreInterface {
       this.conversations.set(continuationId, {
         ...sanitizedState,
         lastAccessed: Date.now(),
-        createdAt: this.conversations.has(continuationId) 
-          ? this.conversations.get(continuationId).createdAt 
+        createdAt: this.conversations.has(continuationId)
+          ? this.conversations.get(continuationId).createdAt
           : Date.now(),
       });
 
@@ -241,14 +241,14 @@ class MemoryContinuationStore extends ContinuationStoreInterface {
   async cleanup(maxAgeMs = 24 * 60 * 60 * 1000) {
     const now = Date.now();
     let cleanedCount = 0;
-    
+
     for (const [id, state] of this.conversations.entries()) {
       if (now - state.lastAccessed > maxAgeMs) {
         this.conversations.delete(id);
         cleanedCount++;
       }
     }
-    
+
     return cleanedCount;
   }
 }
@@ -310,7 +310,7 @@ export function isValidContinuationId(continuationId) {
   if (!continuationId || typeof continuationId !== 'string') {
     return false;
   }
-  
+
   // Check for conv_ prefix and UUID format
   const uuidPattern = /^conv_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidPattern.test(continuationId);

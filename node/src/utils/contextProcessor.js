@@ -70,7 +70,7 @@ async function validateFilePath(filePath, options = {}) {
 
   if (!isAllowed && !options.skipSecurityCheck) {
     throw new ContextProcessorError(
-      `File access denied: path outside allowed directories`,
+      'File access denied: path outside allowed directories',
       'SECURITY_VIOLATION',
       { path: absolutePath, allowedDirs }
     );
@@ -104,10 +104,10 @@ export async function processFileContent(filePath, options = {}) {
   try {
     // Security validation
     const validatedPath = await validateFilePath(filePath, options);
-    
+
     const fileStats = await stat(validatedPath);
     const extension = extname(validatedPath).toLowerCase();
-    
+
     // Check if it's actually a file (not a directory)
     if (!fileStats.isFile()) {
       throw new ContextProcessorError(
@@ -160,7 +160,7 @@ export async function processFileContent(filePath, options = {}) {
       result.content = buffer.toString('base64');
       result.mimeType = getMimeType(extension);
       result.encoding = 'base64';
-      
+
       // Placeholder: Advanced image processing could be added here
       // - Image resizing, format conversion
       // - EXIF data extraction
@@ -238,7 +238,7 @@ export async function processWebSearchContext(query, options = {}) {
     timestamp: new Date().toISOString(),
     // Placeholder: Future implementation could integrate with:
     // - Google Search API
-    // - Bing Search API  
+    // - Bing Search API
     // - DuckDuckGo API
     // - Custom search engines
     placeholder: true,
@@ -308,7 +308,7 @@ export function createFileContext(processedFiles, options = {}) {
   const textFiles = processedFiles.filter(f => f.type === 'text' && !f.error);
   const imageFiles = processedFiles.filter(f => f.type === 'image' && !f.error);
   const errors = processedFiles.filter(f => f.error);
-  
+
   const includeErrors = options.includeErrors !== false; // Default to true
 
   let contextText = '';
@@ -434,7 +434,7 @@ export async function validateFilePaths(filePaths, options = {}) {
         error: error.message,
         code: error.code
       };
-      
+
       if (error.code === 'SECURITY_VIOLATION') {
         results.securityViolations.push(errorInfo);
       } else {
@@ -465,11 +465,11 @@ export function getSupportedExtensions() {
  */
 export function isFileTypeSupported(filePath) {
   const extension = extname(filePath).toLowerCase();
-  
+
   return {
     extension,
     isSupported: SUPPORTED_TEXT_EXTENSIONS.includes(extension) || SUPPORTED_IMAGE_EXTENSIONS.includes(extension),
-    type: SUPPORTED_TEXT_EXTENSIONS.includes(extension) ? 'text' : 
-          SUPPORTED_IMAGE_EXTENSIONS.includes(extension) ? 'image' : 'unknown'
+    type: SUPPORTED_TEXT_EXTENSIONS.includes(extension) ? 'text' :
+      SUPPORTED_IMAGE_EXTENSIONS.includes(extension) ? 'image' : 'unknown'
   };
 }

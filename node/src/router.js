@@ -176,22 +176,22 @@ export async function createRouter(server, config) {
             throw new RouterError(
               `Invalid arguments for tool ${toolName}`,
               'INVALID_ARGUMENTS',
-              { 
+              {
                 providedArgs: Object.keys(toolArgs),
-                expectedSchema: tool.inputSchema 
+                expectedSchema: tool.inputSchema
               }
             );
           }
         }
 
         console.log(`Executing tool: ${toolName}`);
-        
+
         // Execute the tool with dependency injection
         const result = await tool(toolArgs, dependencies);
-        
+
         const executionTime = Date.now() - startTime;
         console.log(`Tool ${toolName} completed in ${executionTime}ms`);
-        
+
         // Ensure result has proper format
         if (!result || !result.content) {
           throw new RouterError(
@@ -206,7 +206,7 @@ export async function createRouter(server, config) {
       } catch (error) {
         const executionTime = Date.now() - startTime;
         console.error(`Tool ${toolName} failed after ${executionTime}ms:`, error.message);
-        
+
         return createErrorResponse(error, toolName, {
           executionTime,
           arguments: toolArgs,
@@ -295,7 +295,7 @@ export async function createRouter(server, config) {
       }
     });
 
-    console.log(`✓ Router configured successfully:`);
+    console.log('✓ Router configured successfully:');
     console.log(`  - Tools: ${Object.keys(tools).length}`);
     console.log(`  - Providers: ${Object.keys(dependencies.providers).length}`);
     console.log(`  - Continuation store: ${dependencies.continuationStore.constructor.name}`);
@@ -351,20 +351,20 @@ export function validateToolArguments(args, schema) {
       for (const [key, propSchema] of Object.entries(schema.properties)) {
         if (key in args) {
           const value = args[key];
-          
+
           // Basic type validation
           if (propSchema.type && typeof value !== propSchema.type) {
             throw new RouterError(
               `Argument '${key}' must be of type ${propSchema.type}`,
               'INVALID_ARGUMENT_TYPE',
-              { 
-                argument: key, 
-                expected: propSchema.type, 
-                received: typeof value 
+              {
+                argument: key,
+                expected: propSchema.type,
+                received: typeof value
               }
             );
           }
-          
+
           // String length validation
           if (propSchema.type === 'string') {
             if (propSchema.minLength && value.length < propSchema.minLength) {
@@ -377,7 +377,7 @@ export function validateToolArguments(args, schema) {
             if (propSchema.maxLength && value.length > propSchema.maxLength) {
               throw new RouterError(
                 `Argument '${key}' must be at most ${propSchema.maxLength} characters`,
-                'ARGUMENT_TOO_LONG', 
+                'ARGUMENT_TOO_LONG',
                 { argument: key, maxLength: propSchema.maxLength, actual: value.length }
               );
             }
@@ -409,7 +409,7 @@ export async function getRouterStats(dependencies) {
   try {
     const tools = getTools();
     const storeStats = await dependencies.continuationStore.getStats();
-    
+
     return {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -425,7 +425,7 @@ export async function getRouterStats(dependencies) {
       memory: process.memoryUsage(),
       environment: dependencies.config.environment.nodeEnv
     };
-    
+
   } catch (error) {
     throw new RouterError(
       'Failed to get router statistics',

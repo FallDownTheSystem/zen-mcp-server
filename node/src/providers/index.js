@@ -6,9 +6,9 @@
  */
 
 // Import individual providers (will be implemented in subsequent tasks)
-// import { openaiProvider } from './openai.js';
-// import { xaiProvider } from './xai.js';
-// import { googleProvider } from './google.js';
+import { openaiProvider } from './openai.js';
+import { xaiProvider } from './xai.js';
+import { googleProvider } from './google.js';
 
 /**
  * Provider registry map
@@ -19,9 +19,9 @@
  */
 const providers = {
   // Will be populated by individual provider modules
-  // openai: openaiProvider,
-  // xai: xaiProvider,
-  // google: googleProvider,
+  openai: openaiProvider,
+  xai: xaiProvider,
+  google: googleProvider,
 };
 
 /**
