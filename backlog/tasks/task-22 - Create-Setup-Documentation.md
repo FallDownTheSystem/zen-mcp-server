@@ -4,6 +4,7 @@ title: Create Setup Documentation
 status: To Do
 assignee: []
 created_date: '2025-07-25'
+updated_date: '2025-07-25'
 labels: []
 dependencies:
   - task-21
@@ -24,3 +25,7 @@ Provide clear instructions for installation and configuration to help users get 
 - [ ] Prerequisites and system requirements specified
 - [ ] Examples of basic usage and configuration
 - [ ] Documentation is clear and easy to follow
+
+## Implementation Notes
+
+UPDATED INSTRUCTIONS: Write setup documentation with npx/pnpm dlx support from GitHub repo (FallDownTheSystem/converse). If NPM package publishing is needed, update task to include publishing plan and implementation steps.

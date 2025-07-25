@@ -26,3 +26,7 @@ Verify Converse MCP Server functionality matches Python implementation through c
 - [ ] Validation that Converse MCP Server achieves feature parity
 - [ ] Test scenarios cover real-world MCP client usage patterns
 - [ ] Full server startup and shutdown testing
+
+## Implementation Notes
+
+UPDATED INSTRUCTIONS: Do comprehensive integration and e2e testing independently. Test all functionality including real API calls, tool integrations, parameter validation, system prompts, and error handling. User will only test after everything is complete.

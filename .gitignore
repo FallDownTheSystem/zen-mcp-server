@@ -1,142 +1,88 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
 
-# C extensions
-*.so
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
 
-# PyInstaller
-*.manifest
-*.spec
+# nyc test coverage
+.nyc_output
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Grunt intermediate storage
+.grunt
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
 .cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+.parcel-cache
 
-# Translations
-*.mo
-*.pot
+# Next.js build output
+.next
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+# Nuxt.js build / generate output
+.nuxt
+dist
 
-# Flask stuff:
-instance/
-.webassets-cache
+# Gatsby files
+.cache/
+public
 
-# Scrapy stuff:
-.scrapy
+# Storybook build outputs
+.out
+.storybook-out
 
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# poetry
-poetry.lock
-
-# pdm
-.pdm.toml
-.pdm-python
-pdm.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Environment files
 .env
-.env~
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # PyCharm
 .idea/
@@ -153,34 +99,33 @@ cython_debug/
 .env.local
 .env.*.local
 
-# Test outputs
-test_output/
+# Test outputs and coverage
 *.test.log
-.coverage
-htmlcov/
-coverage.xml
-.pytest_cache/
+coverage/
+.nyc_output
 
-# Test simulation artifacts (dynamically created during testing)
-test_simulation_files/.claude/
-
-# Temporary test directories
-test-setup/
-
-# Scratch feature documentation files
-FEATURE_*.md
 # Temporary files
-/tmp/
+tmp/
+temp/
 
-# Local user instructions
-CLAUDE.local.md
+# IDE and editor files
+.vscode/
+.idea/
 
-# Claude Code personal settings
-.claude/settings.local.json
+# OS files
+.DS_Store
+Thumbs.db
 
-# Standalone mode files
-.zen_venv/
-.docker_cleaned
+# Log files
 logs/
+*.log
+
+# Development files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backup files
 *.backup
-/.desktop_configured
+*.bak

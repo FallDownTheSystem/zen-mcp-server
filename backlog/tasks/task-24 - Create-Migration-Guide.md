@@ -26,3 +26,7 @@ Create comprehensive migration documentation and establish new repository for Co
 - [ ] Support resources and troubleshooting for migration
 - [ ] Clean repository structure without Python code
 - [ ] Archive strategy for Python implementation reference
+
+## Implementation Notes
+
+UPDATED INSTRUCTIONS: Remove Python implementation and migrate everything from node/ to root. Preserve .env API keys in new format. Add MAX_MCP_OUTPUT_TOKENS=200000 env var and implement token limit checks like Python version. Ensure complete token validation throughout the system.
