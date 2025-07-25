@@ -9,25 +9,25 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { loadConfig } from './config.js';
+import { loadConfig, validateRuntimeConfig, getMcpClientConfig, ConfigurationError } from './config.js';
 import { createRouter } from './router.js';
 
 async function main() {
   try {
-    // Load configuration
+    // Load and validate configuration
     const config = await loadConfig();
+    await validateRuntimeConfig(config);
 
-    // Create MCP server
+    // Get MCP client configuration
+    const mcpConfig = getMcpClientConfig(config);
+
+    // Create MCP server with configuration
     const server = new Server(
       {
-        name: 'converse-mcp-server',
-        version: '1.0.0',
+        name: mcpConfig.name,
+        version: mcpConfig.version,
       },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
+      mcpConfig
     );
 
     // Set up router with server and config
@@ -39,8 +39,18 @@ async function main() {
 
     console.error('Converse MCP Server started successfully');
   } catch (error) {
-    console.error('Failed to start Converse MCP Server:', error);
-    process.exit(1);
+    if (error instanceof ConfigurationError) {
+      console.error('Configuration Error:');
+      console.error(error.message);
+      if (error.details?.errors) {
+        console.error('\nDetailed errors:');
+        error.details.errors.forEach(err => console.error(`  - ${err}`));
+      }
+      process.exit(1);
+    } else {
+      console.error('Failed to start Converse MCP Server:', error);
+      process.exit(1);
+    }
   }
 }
 
