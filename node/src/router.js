@@ -6,7 +6,7 @@
  * Follows functional architecture with comprehensive error handling.
  */
 
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getContinuationStore } from './continuationStore.js';
 import { getTools } from './tools/index.js';
 import { getProviders } from './providers/index.js';
@@ -216,7 +216,7 @@ export async function createRouter(server, config) {
     });
 
     // Register enhanced list_tools handler
-    server.setRequestHandler({ method: 'tools/list' }, async () => {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       try {
         const toolList = Object.entries(tools).map(([name, handler]) => {
           const toolInfo = {
@@ -259,41 +259,7 @@ export async function createRouter(server, config) {
       }
     });
 
-    // Register health check handler for router status
-    server.setRequestHandler({ method: 'router/health' }, async () => {
-      try {
-        const toolCount = Object.keys(tools).length;
-        const providerCount = Object.keys(dependencies.providers).length;
-        const storeStats = await dependencies.continuationStore.getStats();
-
-        return {
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          components: {
-            tools: {
-              count: toolCount,
-              available: Object.keys(tools)
-            },
-            providers: {
-              count: providerCount,
-              available: Object.keys(dependencies.providers)
-            },
-            continuationStore: storeStats,
-            router: {
-              version: '1.0.0',
-              uptime: process.uptime()
-            }
-          }
-        };
-
-      } catch (error) {
-        return {
-          status: 'unhealthy',
-          timestamp: new Date().toISOString(),
-          error: error.message
-        };
-      }
-    });
+    // Note: Custom health endpoint removed - MCP uses standard protocol methods only
 
     console.log('✓ Router configured successfully:');
     console.log(`  - Tools: ${Object.keys(tools).length}`);

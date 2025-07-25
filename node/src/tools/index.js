@@ -5,9 +5,9 @@
  * Each tool receives dependencies via injection and returns MCP-compatible responses.
  */
 
-// Import individual tools (will be implemented in subsequent tasks)
-// import { chatTool } from './chat.js';
-// import { consensusTool } from './consensus.js';
+// Import individual tools
+import { chatTool } from './chat.js';
+import { consensusTool } from './consensus.js';
 
 /**
  * Tool registry map
@@ -15,9 +15,8 @@
  * Tools also have metadata: description, inputSchema
  */
 const tools = {
-  // Will be populated by individual tool modules
-  // chat: chatTool,
-  // consensus: consensusTool,
+  chat: chatTool,
+  consensus: consensusTool,
 };
 
 /**
