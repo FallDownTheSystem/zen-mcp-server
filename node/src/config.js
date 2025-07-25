@@ -7,9 +7,19 @@
  */
 
 import dotenv from 'dotenv';
+import { createLogger, configureLogger } from './utils/logger.js';
+import { ConfigurationError } from './utils/errorHandler.js';
 
 // Load environment variables from .env file (if it exists)
 dotenv.config();
+
+// Configure logger early
+configureLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  isDevelopment: process.env.NODE_ENV === 'development'
+});
+
+const logger = createLogger('config');
 
 /**
  * Configuration schema defining all supported environment variables
@@ -42,16 +52,7 @@ const CONFIG_SCHEMA = {
   },
 };
 
-/**
- * Configuration validation errors
- */
-export class ConfigurationError extends Error {
-  constructor(message, details = {}) {
-    super(message);
-    this.name = 'ConfigurationError';
-    this.details = details;
-  }
-}
+// ConfigurationError now imported from errorHandler
 
 /**
  * Validates and parses environment variable value according to schema
@@ -124,6 +125,9 @@ function validateApiKeyFormat(provider, apiKey) {
  * @throws {ConfigurationError} If configuration is invalid or incomplete
  */
 export async function loadConfig() {
+  const configLogger = logger.operation('loadConfig');
+  configLogger.debug('Starting configuration loading');
+  
   const config = {
     server: {},
     apiKeys: {},
@@ -216,10 +220,12 @@ export async function loadConfig() {
 
     // Log configuration summary (without secrets)
     logConfigurationSummary(config);
+    configLogger.info('Configuration loaded successfully');
 
     return config;
 
   } catch (error) {
+    configLogger.error('Configuration loading failed', { error });
     if (error instanceof ConfigurationError) {
       throw error;
     }

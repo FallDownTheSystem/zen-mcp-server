@@ -11,16 +11,25 @@ import { getContinuationStore } from './continuationStore.js';
 import { getTools } from './tools/index.js';
 import { getProviders } from './providers/index.js';
 import { processUnifiedContext } from './utils/contextProcessor.js';
+import { createLogger, startTimer } from './utils/logger.js';
+import { 
+  ConverseMCPError, 
+  ToolError, 
+  ValidationError,
+  createMCPErrorResponse,
+  withErrorHandler,
+  ERROR_CODES
+} from './utils/errorHandler.js';
+
+const logger = createLogger('router');
 
 /**
- * Custom error class for router operations
+ * Router-specific error class
  */
-export class RouterError extends Error {
-  constructor(message, code = 'ROUTER_ERROR', details = {}) {
-    super(message);
+export class RouterError extends ConverseMCPError {
+  constructor(message, code = ERROR_CODES.ROUTER_ERROR, details = {}) {
+    super(message, code, details, 500);
     this.name = 'RouterError';
-    this.code = code;
-    this.details = details;
   }
 }
 
@@ -32,30 +41,7 @@ export class RouterError extends Error {
  * @returns {object} Standardized error response
  */
 export function createErrorResponse(error, toolName = 'unknown', context = {}) {
-  const errorResponse = {
-    content: [
-      {
-        type: 'text',
-        text: `Error in ${toolName}: ${error.message}`,
-      },
-    ],
-    isError: true,
-    error: {
-      type: error.name || 'Error',
-      code: error.code || 'UNKNOWN_ERROR',
-      message: error.message,
-      toolName,
-      timestamp: new Date().toISOString(),
-      ...context,
-    },
-  };
-
-  // Add stack trace in development mode
-  if (process.env.NODE_ENV === 'development' && error.stack) {
-    errorResponse.error.stack = error.stack;
-  }
-
-  return errorResponse;
+  return createMCPErrorResponse(error, toolName, context);
 }
 
 /**
@@ -152,20 +138,30 @@ async function createDependencies(config) {
  * @returns {Promise<void>}
  */
 export async function createRouter(server, config) {
+  const createRouterLogger = logger.operation('createRouter');
+  const timer = startTimer('router-initialization', 'router');
+  
   try {
+    createRouterLogger.info('Initializing router');
+    
     // Initialize dependencies with validation
     const dependencies = await createDependencies(config);
     const tools = getTools();
 
-    console.log(`Initializing router with ${Object.keys(tools).length} tools...`);
+    createRouterLogger.info(`Router initialized with ${Object.keys(tools).length} tools`);
 
     // Register unified tool call handler with enhanced error handling
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const startTime = Date.now();
+      const toolTimer = startTimer('tool-execution', 'router');
       const toolName = request.params?.name;
       const toolArgs = request.params?.arguments || {};
+      const requestLogger = logger.operation(`tool-call:${toolName}`);
 
       try {
+        requestLogger.info('Tool execution started', { 
+          data: { toolName, argCount: Object.keys(toolArgs).length } 
+        });
+
         // Validate tool existence and callability
         const { tool } = validateTool(toolName, tools);
 
@@ -173,9 +169,9 @@ export async function createRouter(server, config) {
         if (tool.inputSchema) {
           const isValidArgs = validateToolArguments(toolArgs, tool.inputSchema);
           if (!isValidArgs) {
-            throw new RouterError(
+            throw new ValidationError(
               `Invalid arguments for tool ${toolName}`,
-              'INVALID_ARGUMENTS',
+              ERROR_CODES.INVALID_TOOL_ARGS,
               {
                 providedArgs: Object.keys(toolArgs),
                 expectedSchema: tool.inputSchema
@@ -184,32 +180,36 @@ export async function createRouter(server, config) {
           }
         }
 
-        console.log(`Executing tool: ${toolName}`);
-
         // Execute the tool with dependency injection
         const result = await tool(toolArgs, dependencies);
 
-        const executionTime = Date.now() - startTime;
-        console.log(`Tool ${toolName} completed in ${executionTime}ms`);
+        const executionTime = toolTimer('completed');
+        requestLogger.info('Tool execution completed', { 
+          data: { executionTime: `${executionTime}ms` } 
+        });
 
         // Ensure result has proper format
         if (!result || !result.content) {
-          throw new RouterError(
+          throw new ToolError(
             `Tool ${toolName} returned invalid result format`,
-            'INVALID_TOOL_RESULT',
-            { result }
+            ERROR_CODES.TOOL_EXECUTION_FAILED,
+            { result },
+            toolName
           );
         }
 
         return result;
 
       } catch (error) {
-        const executionTime = Date.now() - startTime;
-        console.error(`Tool ${toolName} failed after ${executionTime}ms:`, error.message);
+        const executionTime = toolTimer('failed');
+        requestLogger.error('Tool execution failed', { 
+          error,
+          data: { executionTime: `${executionTime}ms`, argCount: Object.keys(toolArgs).length }
+        });
 
         return createErrorResponse(error, toolName, {
           executionTime,
-          arguments: toolArgs,
+          arguments: Object.keys(toolArgs),
           requestId: request.id || 'unknown'
         });
       }
@@ -261,17 +261,22 @@ export async function createRouter(server, config) {
 
     // Note: Custom health endpoint removed - MCP uses standard protocol methods only
 
-    console.log('✓ Router configured successfully:');
-    console.log(`  - Tools: ${Object.keys(tools).length}`);
-    console.log(`  - Providers: ${Object.keys(dependencies.providers).length}`);
-    console.log(`  - Continuation store: ${dependencies.continuationStore.constructor.name}`);
-    console.log(`  - Environment: ${config.environment.nodeEnv}`);
+    timer('completed');
+    createRouterLogger.info('Router configured successfully', {
+      data: {
+        tools: Object.keys(tools).length,
+        providers: Object.keys(dependencies.providers).length,
+        continuationStore: dependencies.continuationStore.constructor.name,
+        environment: config.environment.nodeEnv
+      }
+    });
 
   } catch (error) {
-    console.error('Failed to create router:', error);
+    timer('failed');
+    createRouterLogger.error('Router initialization failed', { error });
     throw new RouterError(
       'Router initialization failed',
-      'ROUTER_INIT_ERROR',
+      ERROR_CODES.ROUTER_ERROR,
       { originalError: error.message }
     );
   }
