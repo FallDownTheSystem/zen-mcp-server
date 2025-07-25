@@ -13,7 +13,7 @@ priority: high
 
 ## Description
 
-Verify Converse MCP Server functionality matches Python implementation through comprehensive manual testing and full integration testing of running MCP server
+Verify Converse MCP Server functionality matches Python implementation through comprehensive manual testing and full integration testing of running MCP server. **Real API keys are available in the root `.env` file for testing with actual provider APIs.**
 ## Acceptance Criteria
 
 - [ ] Full integration test scripts that run complete MCP server

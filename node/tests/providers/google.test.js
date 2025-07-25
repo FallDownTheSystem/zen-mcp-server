@@ -3,8 +3,7 @@
  * Tests the unified interface implementation without making real API calls
  */
 
-import { describe, it } from 'node:test';
-import assert from 'node:assert';
+import { describe, it, expect } from 'vitest';
 import { googleProvider } from '../../src/providers/google.js';
 
 describe('Google Provider', () => {
@@ -16,12 +15,12 @@ describe('Google Provider', () => {
         }
       };
       
-      assert.strictEqual(googleProvider.validateConfig(config), true);
+      expect(googleProvider.validateConfig(config)).toBe(true);
     });
 
     it('should return false for missing API key', () => {
       const config = { apiKeys: {} };
-      assert.strictEqual(googleProvider.validateConfig(config), false);
+      expect(googleProvider.validateConfig(config)).toBe(false);
     });
 
     it('should return false for short API key', () => {
@@ -31,7 +30,7 @@ describe('Google Provider', () => {
         }
       };
       
-      assert.strictEqual(googleProvider.validateConfig(config), false);
+      expect(googleProvider.validateConfig(config)).toBe(false);
     });
 
     it('should return true for minimum length API key', () => {
@@ -41,7 +40,7 @@ describe('Google Provider', () => {
         }
       };
       
-      assert.strictEqual(googleProvider.validateConfig(config), true);
+      expect(googleProvider.validateConfig(config)).toBe(true);
     });
   });
 
@@ -53,12 +52,12 @@ describe('Google Provider', () => {
         }
       };
       
-      assert.strictEqual(googleProvider.isAvailable(config), true);
+      expect(googleProvider.isAvailable(config)).toBe(true);
     });
 
     it('should return false when config is invalid', () => {
       const config = { apiKeys: {} };
-      assert.strictEqual(googleProvider.isAvailable(config), false);
+      expect(googleProvider.isAvailable(config)).toBe(false);
     });
   });
 
@@ -66,46 +65,46 @@ describe('Google Provider', () => {
     it('should return supported models object', () => {
       const models = googleProvider.getSupportedModels();
       
-      assert.strictEqual(typeof models, 'object');
-      assert.ok('gemini-2.0-flash' in models);
-      assert.ok('gemini-2.0-flash-lite' in models);
-      assert.ok('gemini-2.5-flash' in models);
-      assert.ok('gemini-2.5-pro' in models);
+      expect(typeof models).toBe('object');
+      expect('gemini-2.0-flash' in models).toBeTruthy();
+      expect('gemini-2.0-flash-lite' in models).toBeTruthy();
+      expect('gemini-2.5-flash' in models).toBeTruthy();
+      expect('gemini-2.5-pro' in models).toBeTruthy();
     });
 
     it('should include model configuration details', () => {
       const models = googleProvider.getSupportedModels();
       const flashModel = models['gemini-2.5-flash'];
       
-      assert.strictEqual(flashModel.modelName, 'gemini-2.5-flash');
-      assert.strictEqual(flashModel.friendlyName, 'Gemini (Flash 2.5)');
-      assert.strictEqual(flashModel.contextWindow, 1048576);
-      assert.strictEqual(flashModel.supportsImages, true);
-      assert.strictEqual(flashModel.supportsThinking, true);
+      expect(flashModel.modelName).toBe('gemini-2.5-flash');
+      expect(flashModel.friendlyName).toBe('Gemini (Flash 2.5)');
+      expect(flashModel.contextWindow).toBe(1048576);
+      expect(flashModel.supportsImages).toBe(true);
+      expect(flashModel.supportsThinking).toBe(true);
     });
 
     it('should have correct thinking support configuration', () => {
       const models = googleProvider.getSupportedModels();
       
       // Models that support thinking
-      assert.strictEqual(models['gemini-2.0-flash'].supportsThinking, true);
-      assert.strictEqual(models['gemini-2.5-flash'].supportsThinking, true);
-      assert.strictEqual(models['gemini-2.5-pro'].supportsThinking, true);
+      expect(models['gemini-2.0-flash'].supportsThinking).toBe(true);
+      expect(models['gemini-2.5-flash'].supportsThinking).toBe(true);
+      expect(models['gemini-2.5-pro'].supportsThinking).toBe(true);
       
       // Model that doesn't support thinking
-      assert.strictEqual(models['gemini-2.0-flash-lite'].supportsThinking, false);
+      expect(models['gemini-2.0-flash-lite'].supportsThinking).toBe(false);
     });
 
     it('should have correct image support configuration', () => {
       const models = googleProvider.getSupportedModels();
       
       // Models that support images
-      assert.strictEqual(models['gemini-2.0-flash'].supportsImages, true);
-      assert.strictEqual(models['gemini-2.5-flash'].supportsImages, true);
-      assert.strictEqual(models['gemini-2.5-pro'].supportsImages, true);
+      expect(models['gemini-2.0-flash'].supportsImages).toBe(true);
+      expect(models['gemini-2.5-flash'].supportsImages).toBe(true);
+      expect(models['gemini-2.5-pro'].supportsImages).toBe(true);
       
       // Model that doesn't support images
-      assert.strictEqual(models['gemini-2.0-flash-lite'].supportsImages, false);
+      expect(models['gemini-2.0-flash-lite'].supportsImages).toBe(false);
     });
   });
 
@@ -113,16 +112,16 @@ describe('Google Provider', () => {
     it('should return config for exact model name', () => {
       const config = googleProvider.getModelConfig('gemini-2.5-flash');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'gemini-2.5-flash');
-      assert.strictEqual(config.friendlyName, 'Gemini (Flash 2.5)');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('gemini-2.5-flash');
+      expect(config.friendlyName).toBe('Gemini (Flash 2.5)');
     });
 
     it('should return config for model alias', () => {
       const config = googleProvider.getModelConfig('flash');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'gemini-2.5-flash');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('gemini-2.5-flash');
     });
 
     it('should return config for various aliases', () => {
@@ -131,8 +130,8 @@ describe('Google Provider', () => {
       
       for (const alias of aliases) {
         const config = googleProvider.getModelConfig(alias);
-        assert.ok(config, `Should find config for alias: ${alias}`);
-        assert.strictEqual(config.modelName, 'gemini-2.5-flash');
+        expect(config).toBeTruthy(); // Should find config for alias: ${alias}
+        expect(config.modelName).toBe('gemini-2.5-flash');
       }
     });
 
@@ -141,21 +140,21 @@ describe('Google Provider', () => {
       
       for (const alias of aliases) {
         const config = googleProvider.getModelConfig(alias);
-        assert.ok(config, `Should find config for alias: ${alias}`);
-        assert.strictEqual(config.modelName, 'gemini-2.5-pro');
+        expect(config).toBeTruthy(); // Should find config for alias: ${alias}
+        expect(config.modelName).toBe('gemini-2.5-pro');
       }
     });
 
     it('should return null for unknown model', () => {
       const config = googleProvider.getModelConfig('unknown-model');
-      assert.strictEqual(config, null);
+      expect(config).toBe(null);
     });
 
     it('should be case insensitive', () => {
       const config = googleProvider.getModelConfig('GEMINI-2.5-FLASH');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'gemini-2.5-flash');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('gemini-2.5-flash');
     });
   });
 
@@ -170,12 +169,11 @@ describe('Google Provider', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       const config = { apiKeys: {} };
       
-      await assert.rejects(
-        googleProvider.invoke(messages, { config }),
-        {
+      await expect(googleProvider.invoke(messages, { config })).rejects.toThrow(
+        expect.objectContaining({
           name: 'GoogleProviderError',
           code: 'MISSING_API_KEY'
-        }
+        })
       );
     });
 
@@ -183,48 +181,44 @@ describe('Google Provider', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       const config = { apiKeys: { google: 'invalid' } };
       
-      await assert.rejects(
-        googleProvider.invoke(messages, { config }),
-        {
+      await expect(googleProvider.invoke(messages, { config })).rejects.toThrow(
+        expect.objectContaining({
           name: 'GoogleProviderError',
           code: 'INVALID_API_KEY'
-        }
+        })
       );
     });
 
     it('should throw error for non-array messages', async () => {
       const messages = 'not an array';
       
-      await assert.rejects(
-        googleProvider.invoke(messages, { config: validConfig }),
-        {
+      await expect(googleProvider.invoke(messages, { config: validConfig })).rejects.toThrow(
+        expect.objectContaining({
           name: 'GoogleProviderError',
           code: 'INVALID_MESSAGES'
-        }
+        })
       );
     });
 
     it('should throw error for invalid message role', async () => {
       const messages = [{ role: 'invalid', content: 'Hello' }];
       
-      await assert.rejects(
-        googleProvider.invoke(messages, { config: validConfig }),
-        {
+      await expect(googleProvider.invoke(messages, { config: validConfig })).rejects.toThrow(
+        expect.objectContaining({
           name: 'GoogleProviderError',
           code: 'INVALID_ROLE'
-        }
+        })
       );
     });
 
     it('should throw error for missing message content', async () => {
       const messages = [{ role: 'user' }];
       
-      await assert.rejects(
-        googleProvider.invoke(messages, { config: validConfig }),
-        {
+      await expect(googleProvider.invoke(messages, { config: validConfig })).rejects.toThrow(
+        expect.objectContaining({
           name: 'GoogleProviderError',
           code: 'MISSING_CONTENT'
-        }
+        })
       );
     });
   });
@@ -236,8 +230,8 @@ describe('Google Provider', () => {
       const models = googleProvider.getSupportedModels();
       
       // All models should support system prompts (via message conversion)
-      assert.ok(models['gemini-2.5-flash']);
-      assert.ok(models['gemini-2.5-pro']);
+      expect(models['gemini-2.5-flash']).toBeTruthy();
+      expect(models['gemini-2.5-pro']).toBeTruthy();
     });
 
     it('should handle conversation history', () => {
@@ -246,8 +240,8 @@ describe('Google Provider', () => {
       const models = googleProvider.getSupportedModels();
       
       // All models should support conversation (multiple messages)
-      assert.ok(models['gemini-2.5-flash']);
-      assert.ok(models['gemini-2.5-pro']);
+      expect(models['gemini-2.5-flash']).toBeTruthy();
+      expect(models['gemini-2.5-pro']).toBeTruthy();
     });
   });
 
@@ -256,26 +250,26 @@ describe('Google Provider', () => {
       const models = googleProvider.getSupportedModels();
       
       // Thinking-enabled models
-      assert.strictEqual(models['gemini-2.0-flash'].supportsThinking, true);
-      assert.strictEqual(models['gemini-2.5-flash'].supportsThinking, true);
-      assert.strictEqual(models['gemini-2.5-pro'].supportsThinking, true);
+      expect(models['gemini-2.0-flash'].supportsThinking).toBe(true);
+      expect(models['gemini-2.5-flash'].supportsThinking).toBe(true);
+      expect(models['gemini-2.5-pro'].supportsThinking).toBe(true);
       
       // Non-thinking model
-      assert.strictEqual(models['gemini-2.0-flash-lite'].supportsThinking, false);
+      expect(models['gemini-2.0-flash-lite'].supportsThinking).toBe(false);
     });
 
     it('should have correct thinking token limits', () => {
       const models = googleProvider.getSupportedModels();
       
       // Pro model has highest thinking budget
-      assert.strictEqual(models['gemini-2.5-pro'].maxThinkingTokens, 32768);
+      expect(models['gemini-2.5-pro'].maxThinkingTokens).toBe(32768);
       
       // Flash models have moderate thinking budget
-      assert.strictEqual(models['gemini-2.5-flash'].maxThinkingTokens, 24576);
-      assert.strictEqual(models['gemini-2.0-flash'].maxThinkingTokens, 24576);
+      expect(models['gemini-2.5-flash'].maxThinkingTokens).toBe(24576);
+      expect(models['gemini-2.0-flash'].maxThinkingTokens).toBe(24576);
       
       // Lite model has no thinking
-      assert.strictEqual(models['gemini-2.0-flash-lite'].maxThinkingTokens, 0);
+      expect(models['gemini-2.0-flash-lite'].maxThinkingTokens).toBe(0);
     });
   });
 
@@ -284,10 +278,10 @@ describe('Google Provider', () => {
       const models = googleProvider.getSupportedModels();
       
       // All Gemini models support temperature
-      assert.strictEqual(models['gemini-2.0-flash'].supportsTemperature, true);
-      assert.strictEqual(models['gemini-2.0-flash-lite'].supportsTemperature, true);
-      assert.strictEqual(models['gemini-2.5-flash'].supportsTemperature, true);
-      assert.strictEqual(models['gemini-2.5-pro'].supportsTemperature, true);
+      expect(models['gemini-2.0-flash'].supportsTemperature).toBe(true);
+      expect(models['gemini-2.0-flash-lite'].supportsTemperature).toBe(true);
+      expect(models['gemini-2.5-flash'].supportsTemperature).toBe(true);
+      expect(models['gemini-2.5-pro'].supportsTemperature).toBe(true);
     });
   });
 
@@ -295,14 +289,14 @@ describe('Google Provider', () => {
     it('should default to gemini-2.5-flash', () => {
       // The implementation defaults to 'gemini-2.5-flash'
       const defaultConfig = googleProvider.getModelConfig('gemini-2.5-flash');
-      assert.ok(defaultConfig);
-      assert.strictEqual(defaultConfig.modelName, 'gemini-2.5-flash');
+      expect(defaultConfig).toBeTruthy();
+      expect(defaultConfig.modelName).toBe('gemini-2.5-flash');
     });
 
     it('should support flash as default alias', () => {
       const config = googleProvider.getModelConfig('flash');
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'gemini-2.5-flash');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('gemini-2.5-flash');
     });
   });
 
@@ -311,20 +305,20 @@ describe('Google Provider', () => {
       const models = googleProvider.getSupportedModels();
       
       // All models should have 1M context window
-      assert.strictEqual(models['gemini-2.0-flash'].contextWindow, 1048576);
-      assert.strictEqual(models['gemini-2.0-flash-lite'].contextWindow, 1048576);
-      assert.strictEqual(models['gemini-2.5-flash'].contextWindow, 1048576);
-      assert.strictEqual(models['gemini-2.5-pro'].contextWindow, 1048576);
+      expect(models['gemini-2.0-flash'].contextWindow).toBe(1048576);
+      expect(models['gemini-2.0-flash-lite'].contextWindow).toBe(1048576);
+      expect(models['gemini-2.5-flash'].contextWindow).toBe(1048576);
+      expect(models['gemini-2.5-pro'].contextWindow).toBe(1048576);
     });
 
     it('should have consistent output token limits', () => {
       const models = googleProvider.getSupportedModels();
       
       // All models should have 65536 max output tokens
-      assert.strictEqual(models['gemini-2.0-flash'].maxOutputTokens, 65536);
-      assert.strictEqual(models['gemini-2.0-flash-lite'].maxOutputTokens, 65536);
-      assert.strictEqual(models['gemini-2.5-flash'].maxOutputTokens, 65536);
-      assert.strictEqual(models['gemini-2.5-pro'].maxOutputTokens, 65536);
+      expect(models['gemini-2.0-flash'].maxOutputTokens).toBe(65536);
+      expect(models['gemini-2.0-flash-lite'].maxOutputTokens).toBe(65536);
+      expect(models['gemini-2.5-flash'].maxOutputTokens).toBe(65536);
+      expect(models['gemini-2.5-pro'].maxOutputTokens).toBe(65536);
     });
   });
 });

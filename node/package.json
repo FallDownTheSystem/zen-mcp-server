@@ -12,12 +12,13 @@
     "dev": "NODE_ENV=development LOG_LEVEL=debug node --watch src/index.js",
     "dev:quiet": "NODE_ENV=development LOG_LEVEL=info node --watch src/index.js",
     "dev:verbose": "NODE_ENV=development LOG_LEVEL=trace node --watch src/index.js",
-    "test": "node --test tests/**/*.test.js",
-    "test:watch": "node --watch --test tests/**/*.test.js",
-    "test:providers": "node --test tests/providers/**/*.test.js",
-    "test:tools": "node --test tests/tools/**/*.test.js",
-    "test:integration": "node --test tests/integration/**/*.test.js",
-    "test:coverage": "node --test tests/**/*.test.js --experimental-test-coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:providers": "vitest run tests/providers",
+    "test:tools": "vitest run tests/tools",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "lint:watch": "nodemon --exec \"npm run lint\" --watch src --watch tests",
@@ -53,13 +54,14 @@
   "author": "Converse MCP Server",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.0",
     "@google/genai": "^1.11.0",
-    "openai": "^5.0.0",
-    "dotenv": "^16.4.5"
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "dotenv": "^16.4.5",
+    "openai": "^5.0.0"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "vitest": "^3.2.4"
   }
 }

@@ -3,8 +3,7 @@
  * Tests the unified interface implementation without making real API calls
  */
 
-import { describe, it } from 'node:test';
-import assert from 'node:assert';
+import { describe, it, expect } from 'vitest';
 import { xaiProvider } from '../../src/providers/xai.js';
 
 describe('XAI Provider', () => {
@@ -16,12 +15,12 @@ describe('XAI Provider', () => {
         }
       };
       
-      assert.strictEqual(xaiProvider.validateConfig(config), true);
+      expect(xaiProvider.validateConfig(config)).toBe(true);
     });
 
     it('should return false for missing API key', () => {
       const config = { apiKeys: {} };
-      assert.strictEqual(xaiProvider.validateConfig(config), false);
+      expect(xaiProvider.validateConfig(config)).toBe(false);
     });
 
     it('should return false for invalid API key format', () => {
@@ -31,7 +30,7 @@ describe('XAI Provider', () => {
         }
       };
       
-      assert.strictEqual(xaiProvider.validateConfig(config), false);
+      expect(xaiProvider.validateConfig(config)).toBe(false);
     });
 
     it('should return false for short API key', () => {
@@ -41,7 +40,7 @@ describe('XAI Provider', () => {
         }
       };
       
-      assert.strictEqual(xaiProvider.validateConfig(config), false);
+      expect(xaiProvider.validateConfig(config)).toBe(false);
     });
 
     it('should return false for OpenAI format key', () => {
@@ -51,7 +50,7 @@ describe('XAI Provider', () => {
         }
       };
       
-      assert.strictEqual(xaiProvider.validateConfig(config), false);
+      expect(xaiProvider.validateConfig(config)).toBe(false);
     });
   });
 
@@ -63,12 +62,12 @@ describe('XAI Provider', () => {
         }
       };
       
-      assert.strictEqual(xaiProvider.isAvailable(config), true);
+      expect(xaiProvider.isAvailable(config)).toBe(true);
     });
 
     it('should return false when config is invalid', () => {
       const config = { apiKeys: {} };
-      assert.strictEqual(xaiProvider.isAvailable(config), false);
+      expect(xaiProvider.isAvailable(config)).toBe(false);
     });
   });
 
@@ -76,32 +75,32 @@ describe('XAI Provider', () => {
     it('should return supported models object', () => {
       const models = xaiProvider.getSupportedModels();
       
-      assert.strictEqual(typeof models, 'object');
-      assert.ok('grok-4-0709' in models);
-      assert.ok('grok-3' in models);
-      assert.ok('grok-3-fast' in models);
+      expect(typeof models).toBe('object');
+      expect('grok-4-0709' in models).toBeTruthy();
+      expect('grok-3' in models).toBeTruthy();
+      expect('grok-3-fast' in models).toBeTruthy();
     });
 
     it('should include model configuration details', () => {
       const models = xaiProvider.getSupportedModels();
       const grok4Model = models['grok-4-0709'];
       
-      assert.strictEqual(grok4Model.modelName, 'grok-4-0709');
-      assert.strictEqual(grok4Model.friendlyName, 'X.AI (Grok 4)');
-      assert.strictEqual(grok4Model.contextWindow, 256000);
-      assert.strictEqual(grok4Model.supportsImages, true);
-      assert.strictEqual(grok4Model.supportsTemperature, true);
+      expect(grok4Model.modelName).toBe('grok-4-0709');
+      expect(grok4Model.friendlyName).toBe('X.AI (Grok 4)');
+      expect(grok4Model.contextWindow).toBe(256000);
+      expect(grok4Model.supportsImages).toBe(true);
+      expect(grok4Model.supportsTemperature).toBe(true);
     });
 
     it('should have correct image support configuration', () => {
       const models = xaiProvider.getSupportedModels();
       
       // Grok-4 supports images
-      assert.strictEqual(models['grok-4-0709'].supportsImages, true);
+      expect(models['grok-4-0709'].supportsImages).toBe(true);
       
       // Grok-3 models don't support images
-      assert.strictEqual(models['grok-3'].supportsImages, false);
-      assert.strictEqual(models['grok-3-fast'].supportsImages, false);
+      expect(models['grok-3'].supportsImages).toBe(false);
+      expect(models['grok-3-fast'].supportsImages).toBe(false);
     });
   });
 
@@ -109,16 +108,16 @@ describe('XAI Provider', () => {
     it('should return config for exact model name', () => {
       const config = xaiProvider.getModelConfig('grok-4-0709');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'grok-4-0709');
-      assert.strictEqual(config.friendlyName, 'X.AI (Grok 4)');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('grok-4-0709');
+      expect(config.friendlyName).toBe('X.AI (Grok 4)');
     });
 
     it('should return config for model alias', () => {
       const config = xaiProvider.getModelConfig('grok');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'grok-4-0709');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('grok-4-0709');
     });
 
     it('should return config for various aliases', () => {
@@ -127,21 +126,21 @@ describe('XAI Provider', () => {
       
       for (const alias of aliases) {
         const config = xaiProvider.getModelConfig(alias);
-        assert.ok(config, `Should find config for alias: ${alias}`);
-        assert.strictEqual(config.modelName, 'grok-4-0709');
+        expect(config).toBeTruthy(); // Should find config for alias: ${alias}
+        expect(config.modelName).toBe('grok-4-0709');
       }
     });
 
     it('should return null for unknown model', () => {
       const config = xaiProvider.getModelConfig('unknown-model');
-      assert.strictEqual(config, null);
+      expect(config).toBe(null);
     });
 
     it('should be case insensitive', () => {
       const config = xaiProvider.getModelConfig('GROK-4-0709');
       
-      assert.ok(config);
-      assert.strictEqual(config.modelName, 'grok-4-0709');
+      expect(config).toBeTruthy();
+      expect(config.modelName).toBe('grok-4-0709');
     });
   });
 
@@ -156,12 +155,11 @@ describe('XAI Provider', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       const config = { apiKeys: {} };
       
-      await assert.rejects(
-        xaiProvider.invoke(messages, { config }),
-        {
+      await expect(xaiProvider.invoke(messages, { config })).rejects.toThrow(
+        expect.objectContaining({
           name: 'XAIProviderError',
           code: 'MISSING_API_KEY'
-        }
+        })
       );
     });
 
@@ -169,7 +167,7 @@ describe('XAI Provider', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       const config = { apiKeys: { xai: 'invalid' } };
       
-      await assert.rejects(
+      await expect(
         xaiProvider.invoke(messages, { config }),
         {
           name: 'XAIProviderError',
@@ -182,7 +180,7 @@ describe('XAI Provider', () => {
       const messages = [{ role: 'user', content: 'Hello' }];
       const config = { apiKeys: { xai: 'sk-1234567890abcdef1234567890abcdef1234567890abcdef' } };
       
-      await assert.rejects(
+      await expect(
         xaiProvider.invoke(messages, { config }),
         {
           name: 'XAIProviderError',
@@ -194,7 +192,7 @@ describe('XAI Provider', () => {
     it('should throw error for non-array messages', async () => {
       const messages = 'not an array';
       
-      await assert.rejects(
+      await expect(
         xaiProvider.invoke(messages, { config: validConfig }),
         {
           name: 'XAIProviderError',
@@ -206,7 +204,7 @@ describe('XAI Provider', () => {
     it('should throw error for invalid message role', async () => {
       const messages = [{ role: 'invalid', content: 'Hello' }];
       
-      await assert.rejects(
+      await expect(
         xaiProvider.invoke(messages, { config: validConfig }),
         {
           name: 'XAIProviderError',
@@ -218,7 +216,7 @@ describe('XAI Provider', () => {
     it('should throw error for missing message content', async () => {
       const messages = [{ role: 'user' }];
       
-      await assert.rejects(
+      await expect(
         xaiProvider.invoke(messages, { config: validConfig }),
         {
           name: 'XAIProviderError',
@@ -233,11 +231,11 @@ describe('XAI Provider', () => {
       const models = xaiProvider.getSupportedModels();
       
       // Verify aliases are configured
-      assert.ok(models['grok-4-0709'].aliases.includes('grok'));
-      assert.ok(models['grok-4-0709'].aliases.includes('grok4'));
-      assert.ok(models['grok-4-0709'].aliases.includes('grok-4'));
-      assert.ok(models['grok-3'].aliases.includes('grok3'));
-      assert.ok(models['grok-3-fast'].aliases.includes('grok3fast'));
+      expect(models['grok-4-0709'].aliases.includes('grok')).toBe(true);
+      expect(models['grok-4-0709'].aliases.includes('grok4')).toBe(true);
+      expect(models['grok-4-0709'].aliases.includes('grok-4')).toBe(true);
+      expect(models['grok-3'].aliases.includes('grok3')).toBe(true);
+      expect(models['grok-3-fast'].aliases.includes('grok3fast')).toBe(true);
     });
 
     it('should default to grok-4-0709 model', () => {
@@ -245,7 +243,7 @@ describe('XAI Provider', () => {
       
       // Default model should be grok-4-0709
       const defaultConfig = xaiProvider.getModelConfig('grok');
-      assert.strictEqual(defaultConfig.modelName, 'grok-4-0709');
+      expect(defaultConfig.modelName).toBe('grok-4-0709');
     });
   });
 
@@ -254,9 +252,9 @@ describe('XAI Provider', () => {
       const models = xaiProvider.getSupportedModels();
       
       // All Grok models support temperature
-      assert.strictEqual(models['grok-4-0709'].supportsTemperature, true);
-      assert.strictEqual(models['grok-3'].supportsTemperature, true);
-      assert.strictEqual(models['grok-3-fast'].supportsTemperature, true);
+      expect(models['grok-4-0709'].supportsTemperature).toBe(true);
+      expect(models['grok-3'].supportsTemperature).toBe(true);
+      expect(models['grok-3-fast'].supportsTemperature).toBe(true);
     });
   });
 
@@ -271,7 +269,7 @@ describe('XAI Provider', () => {
       };
       
       // The implementation should use 'https://api.x.ai/v1' as default
-      assert.ok(validConfig.apiKeys.xai.startsWith('xai-'));
+      expect(validConfig.apiKeys.xai.startsWith('xai-')).toBe(true);
     });
 
     it('should use custom base URL when configured', () => {
@@ -285,7 +283,7 @@ describe('XAI Provider', () => {
       };
       
       // The implementation should respect the custom base URL
-      assert.strictEqual(configWithCustomUrl.providers.xaiBaseUrl, 'https://custom.example.com/v1');
+      expect(configWithCustomUrl.providers.xaiBaseUrl).toBe('https://custom.example.com/v1');
     });
   });
 });
