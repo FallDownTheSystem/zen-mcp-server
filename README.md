@@ -1,19 +1,59 @@
-# Zen MCP Server - Simplified
+# MCP Server Implementations
 
 > **Note:** This is a fork based on [https://github.com/BeehiveInnovations/zen-mcp-server](https://github.com/BeehiveInnovations/zen-mcp-server)
 
-A streamlined MCP (Model Context Protocol) server that provides two powerful AI tools for Claude Desktop and other MCP clients.
+This repository contains two MCP (Model Context Protocol) server implementations that provide powerful AI tools for Claude Desktop and other MCP clients.
 
-## Overview
+## Repository Structure
 
-This is a simplified fork of the original Zen MCP Server, focused on providing just two essential tools:
+- **`python/`** - **Zen MCP Server** (Python) - Original implementation, maintained as reference
+- **`node/`** - **Converse MCP Server** (Node.js) - New simplified implementation under development  
+- **`backlog/`** - Project management and development tasks
+
+## Tools Overview
+
+Both implementations provide two essential tools:
 
 - **Chat**: Single-model conversational AI for brainstorming, discussions, and problem-solving
 - **Consensus**: Multi-model parallel consensus gathering with cross-model refinement
 
-The server supports multiple AI providers including OpenAI, Google Gemini, xAI, OpenRouter, and local models through Ollama or other OpenAI-compatible endpoints.
+The servers support multiple AI providers including OpenAI, Google Gemini, xAI, OpenRouter, and local models.
 
-## Quick Start
+## Python Implementation (Zen MCP Server)
+
+The original Python implementation is located in the `python/` directory and serves as a stable reference.
+
+### Quick Start (Python)
+
+```bash
+# Navigate to Python implementation
+cd python
+
+# Follow setup instructions in python/README.md
+```
+
+## Node.js Implementation (Converse MCP Server)
+
+The new **Converse MCP Server** is being developed in Node.js with a simplified, functional architecture. This implementation is currently under active development.
+
+### Quick Start (Node.js)
+
+```bash
+# Navigate to Node.js implementation  
+cd node
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+For detailed development information, see:
+- `backlog/docs/doc-2` - Project Context and Architecture
+- `backlog/docs/doc-3` - Implementation Standards
+
+## Legacy Quick Start (Python)
 
 ### Prerequisites
 - Python 3.10+ (3.12 recommended)

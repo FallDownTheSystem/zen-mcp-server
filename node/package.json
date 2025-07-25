@@ -1,0 +1,41 @@
+{
+  "name": "converse-mcp-server",
+  "version": "1.0.0",
+  "description": "Simplified, functional Node.js implementation of MCP server with chat and consensus tools",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/**/*.test.js",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write src/"
+  },
+  "keywords": [
+    "mcp",
+    "server",
+    "ai",
+    "chat",
+    "consensus",
+    "openai",
+    "google",
+    "gemini",
+    "grok"
+  ],
+  "author": "Converse MCP Server",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@google/genai": "^1.11.0",
+    "openai": "^5.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  }
+}

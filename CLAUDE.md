@@ -1,6 +1,41 @@
-# Claude Development Guide for Zen MCP Server - Simplified
+# Claude Development Guide for MCP Server Implementations
 
-This file contains essential commands and workflows for developing and maintaining the Simplified Zen MCP Server when working with Claude. This version includes only the Chat and Consensus tools.
+This repository contains two MCP server implementations:
+
+## Repository Structure
+
+- **`python/`** - Original Python Zen MCP Server implementation (reference)
+- **`node/`** - New Converse MCP Server implementation (Node.js)
+- **`backlog/`** - Project management and task tracking
+
+## Python Implementation (Legacy - Reference Only)
+
+The Python implementation has been moved to the `python/` directory and serves as a reference. For Python development, all commands should be run from the `python/` directory.
+
+## Node.js Implementation (Active Development)
+
+The new **Converse MCP Server** is being developed in Node.js in the `node/` directory. This implementation follows a simplified, functional architecture.
+
+### Development Setup
+```bash
+# Change to Node.js directory
+cd node
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Run tests
+npm test
+```
+
+For detailed implementation guidance, see:
+- `backlog/docs/doc-2` - Project Context and Architecture
+- `backlog/docs/doc-3` - Implementation Standards and Guidelines
+
+## Python Implementation (Legacy Reference)
 
 ## Quick Reference Commands
 
@@ -9,6 +44,9 @@ This file contains essential commands and workflows for developing and maintaini
 Before making any changes or submitting PRs, always run the comprehensive quality checks:
 
 ```bash
+# Change to Python directory first
+cd python
+
 # Activate virtual environment first
 source venv/bin/activate
 
@@ -27,6 +65,9 @@ This script automatically runs:
 
 **Run Integration Tests (requires API keys):**
 ```bash
+# Change to Python directory first
+cd python
+
 # Run integration tests that make real API calls
 ./run_integration_tests.sh
 
@@ -38,6 +79,9 @@ This script automatically runs:
 
 #### Setup/Update the Server
 ```bash
+# Change to Python directory first
+cd python
+
 # Run setup script (handles everything)
 ./run-server.sh
 ```
@@ -51,6 +95,9 @@ This script will:
 
 #### View Logs
 ```bash
+# Change to Python directory first
+cd python
+
 # Follow logs in real-time
 ./run-server.sh -f
 
