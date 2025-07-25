@@ -8,6 +8,7 @@
 import { createToolResponse, createToolError } from './index.js';
 import { processUnifiedContext, createFileContext } from '../utils/contextProcessor.js';
 import { generateContinuationId, addMessageToHistory } from '../continuationStore.js';
+import { CHAT_PROMPT } from '../systemPrompts.js';
 
 /**
  * Chat tool implementation
@@ -30,8 +31,10 @@ export async function chatTool(args, dependencies) {
       model = 'auto',
       files = [],
       continuation_id,
-      temperature,
-      use_websearch = false
+      temperature = 0.5,
+      use_websearch = false,
+      images = [],
+      reasoning_effort = 'medium'
     } = args;
 
     let conversationHistory = [];
@@ -59,10 +62,11 @@ export async function chatTool(args, dependencies) {
 
     // Process context (files, images, web search)
     let contextMessage = null;
-    if (files.length > 0 || use_websearch) {
+    if (files.length > 0 || images.length > 0 || use_websearch) {
       try {
         const contextRequest = {
           files: Array.isArray(files) ? files : [],
+          images: Array.isArray(images) ? images : [],
           webSearch: use_websearch ? prompt : null
         };
         
@@ -76,9 +80,10 @@ export async function chatTool(args, dependencies) {
           });
         }
         
-        // Add web search results if available (placeholder)
+        // Add web search results if available (placeholder for now)
         if (contextResult.webSearch && !contextResult.webSearch.placeholder) {
           // Future implementation: add web search results to context
+          console.log('[Chat] Web search results available but not yet implemented');
         }
         
       } catch (error) {
@@ -88,7 +93,16 @@ export async function chatTool(args, dependencies) {
     }
 
     // Build message array for provider
-    const messages = [...conversationHistory];
+    const messages = [];
+    
+    // Add system prompt
+    messages.push({
+      role: 'system',
+      content: CHAT_PROMPT
+    });
+    
+    // Add conversation history
+    messages.push(...conversationHistory);
     
     // Add context message if available
     if (contextMessage) {
@@ -137,7 +151,8 @@ export async function chatTool(args, dependencies) {
     const providerOptions = {
       model: model === 'auto' ? undefined : model,
       temperature,
-      // Add any other provider-specific options
+      reasoning_effort,
+      config
     };
 
     // Call provider
@@ -231,34 +246,49 @@ function mapModelToProvider(model) {
 }
 
 // Tool metadata
-chatTool.description = 'Conversational AI tool with context and continuation support';
+chatTool.description = 'GENERAL CHAT & COLLABORATIVE THINKING - For development assistance, brainstorming, and code analysis. Supports files, images, and conversation continuation.';
 chatTool.inputSchema = {
   type: 'object',
   properties: {
     prompt: {
       type: 'string',
-      description: 'The user prompt for the AI',
+      description: 'Your question or topic with relevant context. More detail enables better responses. Example: "How should I structure the authentication module for this Express.js API?"',
     },
     model: {
       type: 'string',
-      description: 'AI model to use (optional, defaults to auto-selection)',
+      description: 'AI model to use. Examples: "auto" (recommended), "gemini-2.5-flash", "o3", "grok-4-0709". Defaults to auto-selection.',
     },
     files: {
       type: 'array',
       items: { type: 'string' },
-      description: 'File paths to include as context',
+      description: 'File paths to include as context (absolute paths required). Example: ["/path/to/src/auth.js", "/path/to/config.json"]',
+    },
+    images: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Image paths for visual context (absolute paths or base64 data). Example: ["/path/to/diagram.png", "data:image/jpeg;base64,/9j/4AAQ..."]',
     },
     continuation_id: {
       type: 'string',
-      description: 'Continuation ID for persistent conversation',
+      description: 'Continuation ID for persistent conversation. Example: "chat_1703123456789_abc123"',
     },
     temperature: {
       type: 'number',
-      description: 'Response randomness (0.0-1.0)',
+      description: 'Response randomness (0.0-1.0). Examples: 0.2 (focused), 0.5 (balanced), 0.8 (creative). Default: 0.5',
+      minimum: 0.0,
+      maximum: 1.0,
+      default: 0.5
+    },
+    reasoning_effort: {
+      type: 'string',
+      enum: ['minimal', 'low', 'medium', 'high', 'max'],
+      description: 'Reasoning depth for thinking models. Examples: "minimal" (quick), "medium" (balanced), "high" (complex analysis). Default: "medium"',
+      default: 'medium'
     },
     use_websearch: {
       type: 'boolean',
-      description: 'Enable web search for current information',
+      description: 'Enable web search for current information and best practices. Example: true for framework documentation, false for private code analysis. Default: false',
+      default: false
     },
   },
   required: ['prompt'],

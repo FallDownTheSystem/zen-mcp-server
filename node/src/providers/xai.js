@@ -142,6 +142,7 @@ export const xaiProvider = {
       temperature = 0.7,
       maxTokens = null,
       stream = false,
+      reasoningEffort = 'medium',
       config,
       ...otherOptions
     } = options;
@@ -187,6 +188,12 @@ export const xaiProvider = {
     // Add max tokens if specified
     if (maxTokens) {
       requestPayload.max_tokens = Math.min(maxTokens, modelConfig.maxOutputTokens || 256000);
+    }
+
+    // Note: XAI/Grok models don't currently support reasoning_effort parameter
+    // but we accept it for API consistency
+    if (reasoningEffort) {
+      console.log(`[XAI] Note: reasoning_effort "${reasoningEffort}" provided but not supported by Grok models`);
     }
 
     try {

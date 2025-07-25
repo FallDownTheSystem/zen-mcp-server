@@ -8,6 +8,7 @@
 import { createToolResponse, createToolError } from './index.js';
 import { processUnifiedContext, createFileContext } from '../utils/contextProcessor.js';
 import { generateContinuationId, addMessageToHistory } from '../continuationStore.js';
+import { CONSENSUS_PROMPT } from '../systemPrompts.js';
 
 /**
  * Consensus tool implementation
@@ -33,10 +34,12 @@ export async function consensusTool(args, dependencies) {
       prompt,
       models,
       relevant_files = [],
+      images = [],
       continuation_id,
       enable_cross_feedback = true,
       cross_feedback_prompt,
-      temperature = 0.2
+      temperature = 0.2,
+      reasoning_effort = 'medium'
     } = args;
 
     let conversationHistory = [];
@@ -62,12 +65,13 @@ export async function consensusTool(args, dependencies) {
       continuationId = generateContinuationId();
     }
 
-    // Process context (files)
+    // Process context (files and images)
     let contextMessage = null;
-    if (relevant_files.length > 0) {
+    if (relevant_files.length > 0 || images.length > 0) {
       try {
         const contextRequest = {
-          files: Array.isArray(relevant_files) ? relevant_files : []
+          files: Array.isArray(relevant_files) ? relevant_files : [],
+          images: Array.isArray(images) ? images : []
         };
         
         const contextResult = await processUnifiedContext(contextRequest);
@@ -87,7 +91,16 @@ export async function consensusTool(args, dependencies) {
     }
 
     // Build message array for providers
-    const messages = [...conversationHistory];
+    const messages = [];
+    
+    // Add system prompt
+    messages.push({
+      role: 'system',
+      content: CONSENSUS_PROMPT
+    });
+    
+    // Add conversation history
+    messages.push(...conversationHistory);
     
     // Add context message if available
     if (contextMessage) {
@@ -145,6 +158,8 @@ export async function consensusTool(args, dependencies) {
         options: {
           model: modelName,
           temperature,
+          reasoning_effort,
+          config,
           ...modelSpec // Allow model-specific overrides
         }
       });
@@ -364,13 +379,13 @@ function mapModelToProvider(model) {
 }
 
 // Tool metadata
-consensusTool.description = 'Multi-provider consensus gathering with parallel execution';
+consensusTool.description = 'PARALLEL CONSENSUS WITH CROSS-MODEL FEEDBACK - Gathers perspectives from multiple AI models simultaneously. Models provide initial responses, then optionally refine based on others\' insights. Returns both phases in a single call. Handles partial failures gracefully. For: complex decisions, architectural choices, technical evaluations.';
 consensusTool.inputSchema = {
   type: 'object',
   properties: {
     prompt: {
       type: 'string',
-      description: 'The question or problem to gather consensus on',
+      description: 'The problem or proposal to gather consensus on. Include context and specific questions. Example: "Should we use microservices or monolith architecture for our e-commerce platform with 100k users?"',
     },
     models: {
       type: 'array',
@@ -381,30 +396,43 @@ consensusTool.inputSchema = {
         },
         required: ['model'],
       },
-      description: 'List of model configurations to consult',
+      description: 'List of models to consult. Example: [{"model": "o3"}, {"model": "gemini-2.5-flash"}, {"model": "grok-4-0709"}]',
     },
     relevant_files: {
       type: 'array',
       items: { type: 'string' },
-      description: 'List of file paths to include as context',
+      description: 'File paths for additional context (absolute paths). Example: ["/path/to/architecture.md", "/path/to/requirements.txt"]',
+    },
+    images: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Image paths for visual context (absolute paths or base64). Example: ["/path/to/current_architecture.png", "/path/to/user_flow.jpg"]',
     },
     continuation_id: {
       type: 'string',
-      description: 'Continuation ID for persistent conversation',
+      description: 'Thread continuation ID for multi-turn conversations. Example: "consensus_1703123456789_xyz789"',
     },
     enable_cross_feedback: {
       type: 'boolean',
-      description: 'Enable refinement phase where models see others responses',
+      description: 'Enable refinement phase where models see others\' responses and can improve their answers. Example: true (recommended), false (faster single-phase only). Default: true',
       default: true,
     },
     cross_feedback_prompt: {
       type: 'string',
-      description: 'Custom prompt for refinement phase',
+      description: 'Custom prompt for refinement phase. Example: "Focus on scalability trade-offs in your refinement" or leave empty for default cross-feedback prompt',
     },
     temperature: {
       type: 'number',
-      description: 'Response randomness (0.0-1.0)',
+      description: 'Response randomness (0.0-1.0). Examples: 0.1 (very focused), 0.2 (analytical - default), 0.5 (balanced). Default: 0.2',
+      minimum: 0.0,
+      maximum: 1.0,
       default: 0.2,
+    },
+    reasoning_effort: {
+      type: 'string',
+      enum: ['minimal', 'low', 'medium', 'high', 'max'],
+      description: 'Reasoning depth for thinking models. Examples: "medium" (balanced - default), "high" (complex analysis), "max" (thorough evaluation). Default: "medium"',
+      default: 'medium'
     },
   },
   required: ['prompt', 'models'],
